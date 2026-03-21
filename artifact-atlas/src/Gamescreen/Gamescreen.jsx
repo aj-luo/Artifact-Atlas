@@ -1,6 +1,6 @@
 import chinese_vase from '../assets/Chinese_vase.jpg'
 import styles from './Gamescreen.module.css'
-import HistorySlider from '../../HistorySlider/HistorySlider.jsx'
+import HistorySlider from '../HistorySlider/HistorySlider.jsx'
 import React, { useState, useMemo } from 'react';
 import Select from 'react-select';
 import countryList from 'react-select-country-list';
