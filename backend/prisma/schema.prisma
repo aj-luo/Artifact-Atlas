@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model DistMatrix {
+  iso_o         String
+  iso_d         String
+  contig        String?
+  comlang_off   String?
+  comlang_ethno String?
+  colony        String?
+  comcol        String?
+  curcol        String?
+  col45         String?
+  smctry        String?
+  dist          Float?
+  distcap       Float?
+  distw         String?
+  distwces      String?
+
+  @@id([iso_o, iso_d])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model MetObjects {
+  Object_ID               BigInt        @id @map("Object ID")
+  Object_Name             String?       @map("Object Name")
+  Title                   String?
+  Culture                 String?
+  Period                  String?
+  Dynasty                 String?
+  Object_Date             String?       @map("Object Date")
+  Object_Begin_Date       BigInt?       @map("Object Begin Date")
+  Object_End_Date         BigInt?       @map("Object End Date")
+  Classification          String?
+  Link_Resource           String?       @map("Link Resource")
+  Object_Wikidata_URL     String?       @map("Object Wikidata URL")
+  Metadata_Date           String?       @map("Metadata Date")
+  Tags                    String?
+  Tags_AAT_URL            String?       @map("Tags AAT URL")
+  Tags_Wikidata_URL       String?       @map("Tags Wikidata URL")
+  Primary_Image_URL       String?       @map("Primary Image URL")
+  Primary_Image_Small_URL String?       @map("Primary Image Small URL")
+  Modern_Country          String?       @map("Modern Country")
+  Assignment_Method       String?       @map("Assignment Method")
+  game_status             game_status[]
+  reported_inaccurate     reported_inaccurate[]
+}
+
+/// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model country_city_locations {
+  iso2             String?
+  iso3             String
+  cnum             BigInt?
+  country          String?
+  pays             String?
+  area             BigInt?
+  dis_int          Float?
+  landlocked       String?
+  continent        String?
+  city_en          String
+  city_fr          String?
+  lat              Float?
+  lon              Float?
+  cap              BigInt?
+  maincity         BigInt?
+  citynum          String?
+  langoff_1        String?
+  langoff_2        String?
+  langoff_3        String?
+  lang20_1         String?
+  lang20_2         String?
+  lang20_3         String?
+  lang20_4         String?
+  lang9_1          String?
+  lang9_2          String?
+  lang9_3          String?
+  lang9_4          String?
+  colonizer1       String?
+  colonizer2       String?
+  colonizer3       String?
+  colonizer4       String?
+  short_colonizer1 String?
+  short_colonizer2 String?
+  short_colonizer3 String?
+
+  @@ignore
+}
+
+model reported_inaccurate {
+  id                    BigInt     @id @default(autoincrement())
+  object_id             BigInt
+  is_date_incorrect     Boolean    @default(false)
+  is_location_incorrect Boolean    @default(false)
+  description           String?    @db.VarChar
+  created_at            DateTime   @default(now()) @db.Timestamptz(6)
+
+  MetObjects            MetObjects @relation(fields: [object_id], references: [Object_ID], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model game_status {
+  id               BigInt     @id(map: "game_results_pkey") @default(autoincrement())
+  created_at       DateTime   @default(now()) @db.Timestamptz(6)
+  game_id          String?    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  player_id        String?    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  guess_number     Int?
+  country_guessed  String?    @db.VarChar
+  time_guessed     DateTime?  @db.Date
+  object_uuid      BigInt
+  country_distance Float?
+  time_distance    BigInt?
+  is_correct       Boolean?
+  MetObjects       MetObjects @relation(fields: [object_uuid], references: [Object_ID], onDelete: NoAction, onUpdate: NoAction, map: "game_results_object_uuid_fkey")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model iso_code_mapping {
+  name                     String?
+  alpha_2                  String? @map("alpha-2")
+  alpha_3                  String  @id @map("alpha-3")
+  country_code             BigInt? @map("country-code")
+  iso_3166_2               String? @map("iso_3166-2")
+  region                   String?
+  sub_region               String? @map("sub-region")
+  intermediate_region      String? @map("intermediate-region")
+  region_code              BigInt? @map("region-code")
+  sub_region_code          BigInt? @map("sub-region-code")
+  intermediate_region_code String? @map("intermediate-region-code")
+}

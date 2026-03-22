@@ -1,0 +1,30 @@
+{
+  "name": "artifact-atlas-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.22.0",
+    "@supabase/supabase-js": "^2.99.2",
+    "next": "^15.3.0",
+    "openapi-types": "^12.1.3",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "swagger-ui-react": "^5.32.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/swagger-ui-react": "^5.18.0",
+    "prisma": "^5.22.0",
+    "typescript": "^5.7.0"
+  }
+}
