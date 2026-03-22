@@ -1,25 +1,22 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { metCountryToIso3 } from '@/lib/metCountryMap';
+import { gameStore, MAX_GUESSES } from '@/lib/gameStore';
 
 /**
  * POST /api/game/new
  *
- * Picks a random eligible MetObject (has image + country + begin date)
- * and starts a new 5-guess game.
+ * Picks a random eligible MetObject, stores game state in memory,
+ * and returns the game handle. No objectId is needed in subsequent requests.
  *
- * Response:
- *   { gameId, objectId, imageUrl }
- *
- * The client must echo back objectId with every subsequent guess.
+ * Response: { gameId, imageUrl, title }
  */
 export async function POST() {
-  // Count eligible objects
   const count = await db.metObjects.count({
     where: {
-      Primary_Image_URL:  { not: null },
-      Modern_Country:     { not: null },
-      Object_Begin_Date:  { not: null },
+      Primary_Image_URL: { not: null },
+      Modern_Country:    { not: null },
+      Object_Begin_Date: { not: null },
     },
   });
 
@@ -27,10 +24,7 @@ export async function POST() {
     return NextResponse.json({ error: 'No eligible artifacts found' }, { status: 404 });
   }
 
-  // Random skip — keep retrying if the selected row has an unmappable country
-  for (let attempts = 0; attempts < 10; attempts++) {
-    const skip = Math.floor(Math.random() * count);
-
+  for (let attempt = 0; attempt < 10; attempt++) {
     const artifact = await db.metObjects.findFirst({
       where: {
         Primary_Image_URL: { not: null },
@@ -38,26 +32,38 @@ export async function POST() {
         Object_Begin_Date: { not: null },
       },
       select: {
-        Object_ID:           true,
-        Primary_Image_URL:   true,
-        Modern_Country:      true,
-        Object_Begin_Date:   true,
-        Title:               true,
+        Object_ID:         true,
+        Primary_Image_URL: true,
+        Modern_Country:    true,
+        Object_Begin_Date: true,
+        Title:             true,
       },
-      skip,
+      skip: Math.floor(Math.random() * count),
     });
 
     if (!artifact) continue;
 
-    const iso3 = metCountryToIso3(artifact.Modern_Country!);
-    if (!iso3) continue; // skip if country name isn't in our map
+    const artifactIso3 = metCountryToIso3(artifact.Modern_Country!);
+    if (!artifactIso3) continue;
 
-    return NextResponse.json({
-      gameId:   crypto.randomUUID(),
-      objectId: artifact.Object_ID.toString(),
-      imageUrl: artifact.Primary_Image_URL,
-      title:    artifact.Title,
-    }, { status: 201 });
+    const gameId = crypto.randomUUID();
+
+    gameStore.set(gameId, {
+      gameId,
+      objectId:     artifact.Object_ID,
+      artifactIso3,
+      artifactYear: Number(artifact.Object_Begin_Date),
+      imageUrl:     artifact.Primary_Image_URL!,
+      title:        artifact.Title ?? null,
+      guesses:      [],
+      status:       'active',
+      guessesLeft:  MAX_GUESSES,
+    });
+
+    return NextResponse.json(
+      { gameId, imageUrl: artifact.Primary_Image_URL, title: artifact.Title },
+      { status: 201 },
+    );
   }
 
   return NextResponse.json(
