@@ -31,10 +31,10 @@ export const swaggerSpec: OpenAPIV3.Document = {
                   type: 'object',
                   properties: {
                     gameId:   { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
-                    objectId: { type: 'string', example: '469719' },
                     imageUrl: { type: 'string', format: 'uri' },
-                    title:    { type: 'string', example: 'Virgin and Child Enthroned' },
+                    //title:    { type: 'string', example: 'Virgin and Child Enthroned' },
                   },
+                  required: ['gameId', 'imageUrl'],
                 },
               },
             },
@@ -89,11 +89,11 @@ export const swaggerSpec: OpenAPIV3.Document = {
               examples: {
                 normalGuess: {
                   summary: 'Normal guess',
-                  value: { country: 'CAN', year: 1965, objectId: '469719' },
+                  value: { country: 'CAN', year: 1965 },
                 },
                 forfeit: {
                   summary: 'Forfeit',
-                  value: { forfeit: true, objectId: '469719' },
+                  value: { forfeit: true },
                 },
               },
             },
@@ -109,7 +109,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
             },
           },
           '400': { description: 'Missing or invalid fields' },
-          '404': { description: 'Artifact not found' },
+          '404': { description: 'Game not found' },
           '409': { description: 'Game already finished' },
         },
       },
@@ -218,13 +218,13 @@ export const swaggerSpec: OpenAPIV3.Document = {
     schemas: {
       GuessRequest: {
         type: 'object',
+        description:
+          'Identify the game with `gameId` in the URL only. Body: either `{ forfeit: true }` or `{ country`, `year` } (ISO alpha-3 + year). Do not send Met object id — the server loads it from session state.',
         properties: {
-          objectId: { type: 'string', description: 'MetObjects Object ID', example: '469719' },
-          country:  { type: 'string', description: 'ISO 3166-1 alpha-3 country code', example: 'CAN' },
-          year:     { type: 'integer', description: 'Guessed year (AD positive, BC negative)', example: 1965 },
-          forfeit:  { type: 'boolean', description: 'Set true to forfeit the game immediately' },
+          country: { type: 'string', description: 'ISO 3166-1 alpha-3 country code', example: 'CAN' },
+          year:    { type: 'integer', description: 'Guessed year (AD positive, BC negative)', example: 1965 },
+          forfeit: { type: 'boolean', description: 'Set true to forfeit the game immediately' },
         },
-        required: ['objectId'],
       },
 
       GuessResponse: {
@@ -236,7 +236,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
           geo: {
             type: 'object',
             properties: {
-              bearing:    { type: 'number', example: 190.005 },
+              cardinal:   { type: 'string', example: 'SE', description: 'Compass bucket from bearing' },
               distanceKm: { type: 'integer', example: 3124 },
               display:    { type: 'string', example: '190.005°, 3124km' },
             },
@@ -263,7 +263,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
               display:    { type: 'string' },
             },
           },
-          yearDiff: { type: 'integer', example: 35 },
+          yearHint: { type: 'string', enum: ['Older', 'Younger', 'Correct'] },
           correct:  { type: 'boolean' },
         },
       },

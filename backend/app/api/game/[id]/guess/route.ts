@@ -2,9 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCapitals } from '@/lib/capitals';
 import { bearing, yearHint } from '@/lib/geo';
-import { gameStore, MAX_GUESSES, type GuessRecord } from '@/lib/gameStore';
+import { gameStore, pairCache, MAX_GUESSES, type GuessRecord } from '@/lib/gameStore';
 
 type Params = { params: Promise<{ id: string }> };
+
+function get_cardinal_from_bearing(b: number): string {
+  if (b >= 337.5 || b < 22.5)  return 'N';
+  if (b < 67.5)  return 'NE';
+  if (b < 112.5) return 'E';
+  if (b < 157.5) return 'SE';
+  if (b < 202.5) return 'S';
+  if (b < 247.5) return 'SW';
+  if (b < 292.5) return 'W';
+  return 'NW';
+}
 
 /**
  * POST /api/game/:gameId/guess
@@ -38,7 +49,6 @@ export async function POST(req: NextRequest, { params }: Params) {
     game.status      = 'forfeited';
     game.guessesLeft = 0;
 
-    // Audit log
     await db.game_status.create({
       data: {
         game_id:         gameId,
@@ -60,30 +70,40 @@ export async function POST(req: NextRequest, { params }: Params) {
     );
   }
 
-  const guessedIso3 = country.toUpperCase();
+  const guessedIso3   = country.toUpperCase();
   const isSameCountry = guessedIso3 === game.artifactIso3;
 
-  // ── Distance — DistMatrix (single DB read, only when countries differ) ────
+  // ── Geo: pair cache → DB + trig only on first miss ────────────────────────
   let distKm = 0;
+  let bear   = 0;
   if (!isSameCountry) {
-    const entry = await db.distMatrix.findUnique({
-      where: { iso_o_iso_d: { iso_o: guessedIso3, iso_d: game.artifactIso3 } },
-      select: { distcap: true },
-    });
-    distKm = entry?.distcap ?? 0;
-  }
+    const key    = `${guessedIso3}->${game.artifactIso3}`;
+    const cached = pairCache.get(key);
 
-  // ── Bearing — capitals cache (no DB hit after first load) ─────────────────
-  let bear = 0;
-  if (!isSameCountry) {
-    const capitals = await getCapitals();
-    const from = capitals.get(guessedIso3);
-    const to   = capitals.get(game.artifactIso3);
-    if (from && to) bear = bearing(from.lat, from.lng, to.lat, to.lng);
+    if (cached) {
+      distKm = cached.distKm;
+      bear   = cached.bear;
+    } else {
+      // Fetch DistMatrix and capitals in parallel on cache miss
+      const [entry, capitals] = await Promise.all([
+        db.distMatrix.findUnique({
+          where:  { iso_o_iso_d: { iso_o: guessedIso3, iso_d: game.artifactIso3 } },
+          select: { distcap: true },
+        }),
+        getCapitals(),
+      ]);
+
+      distKm = entry?.distcap ?? 0;
+      const from = capitals.get(guessedIso3);
+      const to   = capitals.get(game.artifactIso3);
+      if (from && to) bear = bearing(from.lat, from.lng, to.lat, to.lng);
+
+      pairCache.set(key, { distKm, bear });
+    }
   }
 
   // ── Year hint (pure computation) ──────────────────────────────────────────
-  const hint = yearHint(game.artifactYear, Number(year));
+  const hint = yearHint(game.artifactBeginYear, game.artifactEndYear, Number(year));
   const won  = isSameCountry && hint === 'Correct';
 
   const record: GuessRecord = {
@@ -91,6 +111,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     country:     guessedIso3,
     year:        Number(year),
     bearing:     parseFloat(bear.toFixed(3)),
+    cardinal:    get_cardinal_from_bearing(bear),
     distanceKm:  Math.round(distKm),
     geoDisplay:  isSameCountry ? '0.000°, 0km' : `${bear.toFixed(3)}°, ${Math.round(distKm)}km`,
     yearHint:    hint,
@@ -106,7 +127,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     ? 'lost'
     : 'active';
 
-  // ── Audit log write (fire-and-forget style, non-blocking) ─────────────────
+  // ── Audit log (fire-and-forget) ───────────────────────────────────────────
   db.game_status.create({
     data: {
       game_id:          gameId,
@@ -115,7 +136,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       time_guessed:     new Date(Number(year), 0, 1),
       object_uuid:      game.objectId,
       country_distance: record.distanceKm,
-      time_distance:    BigInt(Math.abs(game.artifactYear - Number(year))),
+      time_distance:    BigInt(Math.max(0, game.artifactBeginYear - Number(year), Number(year) - game.artifactEndYear)),
       is_correct:       won,
     },
   }).catch(console.error);
@@ -125,9 +146,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     guessesLeft:  game.guessesLeft,
     gameStatus:   game.status,
     geo: {
-      bearing:    record.bearing,
+      //bearing:    record.bearing,
+      cardinal:   record.cardinal,
       distanceKm: record.distanceKm,
-      display:    record.geoDisplay,
+      // display:    record.geoDisplay, T
     },
     year: { hint },
   });

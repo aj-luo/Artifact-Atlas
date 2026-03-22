@@ -40,12 +40,14 @@ export function distanceKm(
 /**
  * "Older" | "Younger" | "Correct"
  *
- * Framed from the artifact's perspective:
- *   artifact.yearMade > guessedYear  →  artifact is more recent  →  "Younger"
- *   artifact.yearMade < guessedYear  →  artifact is older        →  "Older"
- *   equal                            →  "Correct"
+ * Correct  — guessed year falls within [beginYear - 5, endYear + 5]
+ * Younger  — guess is too early  (artifact is more recent than the guess)
+ * Older    — guess is too late   (artifact is older than the guess)
+ *
+ * Negative years = BC (e.g. -500 = 500 BC).
+ * beginYear is always ≤ endYear (caller must ensure this).
  */
-export function yearHint(artifactYear: number, guessedYear: number): string {
-  if (artifactYear === guessedYear) return "Correct";
-  return artifactYear > guessedYear ? "Younger" : "Older";
+export function yearHint(beginYear: number, endYear: number, guessedYear: number): string {
+  if (guessedYear >= beginYear - 5 && guessedYear <= endYear + 5) return 'Correct';
+  return guessedYear < beginYear ? 'Younger' : 'Older';
 }
