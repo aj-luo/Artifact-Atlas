@@ -32,7 +32,7 @@ export const swaggerSpec: OpenAPIV3.Document = {
                   properties: {
                     gameId:   { type: 'string', format: 'uuid', example: 'a1b2c3d4-...' },
                     imageUrl: { type: 'string', format: 'uri' },
-                    title:    { type: 'string', example: 'Virgin and Child Enthroned' },
+                    //title:    { type: 'string', example: 'Virgin and Child Enthroned' },
                   },
                   required: ['gameId', 'imageUrl'],
                 },

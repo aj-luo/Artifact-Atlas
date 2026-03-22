@@ -74,7 +74,11 @@ export async function POST() {
     });
 
     return NextResponse.json(
-      { gameId, imageUrl: artifact.Primary_Image_URL, title: artifact.Title },
+      { 
+        gameId, imageUrl: 
+        artifact.Primary_Image_URL, 
+        // title: artifact.Title 
+      },
       { status: 201 },
     );
   }
