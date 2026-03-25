@@ -15,10 +15,16 @@ import { getDistribution, weightedRandom, PERIOD_RANGES } from '@/lib/distributi
  * Country/period distributions are computed once and cached for the process
  * lifetime, so this route only ever issues a single DB query per request.
  *
- * Response: { gameId, imageUrl, title }
+ * Response: { gameId, imageUrl }
  */
 export async function POST() {
-  const dist = await getDistribution();
+  let dist;
+  try {
+    dist = await getDistribution();
+  } catch (err) {
+    console.error('[game/new] Failed to load distribution cache:', err);
+    return NextResponse.json({ error: 'Service unavailable — could not load artifact distribution' }, { status: 503 });
+  }
 
   if (dist.periods.length === 0) {
     return NextResponse.json({ error: 'No eligible artifacts found' }, { status: 404 });
@@ -32,22 +38,29 @@ export async function POST() {
 
     const range = PERIOD_RANGES[period];
 
-    const artifact = await db.metObjects.findFirst({
-      where: {
-        Primary_Image_URL: { not: null },
-        Modern_Country:    country,
-        Object_Begin_Date: { not: null, ...range },
-      },
-      select: {
-        Object_ID:         true,
-        Primary_Image_URL: true,
-        Modern_Country:    true,
-        Object_Begin_Date: true,
-        Object_End_Date:   true,
-        Title:             true,
-      },
-      skip: Math.floor(Math.random() * count),
-    });
+    let artifact;
+    try {
+      artifact = await db.metObjects.findFirst({
+        where: {
+          Primary_Image_URL: { not: null },
+          Modern_Country:    country,
+          Object_Begin_Date: { not: null, ...range },
+        },
+        select: {
+          Object_ID:         true,
+          Primary_Image_URL: true,
+          Modern_Country:    true,
+          Object_Begin_Date: true,
+          Object_End_Date:   true,
+          Title:             true,
+        },
+        orderBy: { Object_ID: 'asc' },
+        skip:    Math.floor(Math.random() * count),
+      });
+    } catch (err) {
+      console.error(`[game/new] DB error on attempt ${attempt + 1}:`, err);
+      return NextResponse.json({ error: 'Database error' }, { status: 503 });
+    }
 
     if (!artifact) continue;
 
@@ -56,7 +69,8 @@ export async function POST() {
 
     const gameId    = crypto.randomUUID();
     const beginYear = Number(artifact.Object_Begin_Date);
-    const endYear   = artifact.Object_End_Date
+    // Use != null so that Object_End_Date = 0n (year 0 / 1 AD) is not treated as missing
+    const endYear   = artifact.Object_End_Date != null
       ? Math.max(Number(artifact.Object_End_Date), beginYear)
       : beginYear;
 
@@ -74,11 +88,7 @@ export async function POST() {
     });
 
     return NextResponse.json(
-      { 
-        gameId, imageUrl: 
-        artifact.Primary_Image_URL, 
-        // title: artifact.Title 
-      },
+      { gameId, imageUrl: artifact.Primary_Image_URL },
       { status: 201 },
     );
   }

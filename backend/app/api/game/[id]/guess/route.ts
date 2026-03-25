@@ -49,7 +49,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     game.status      = 'forfeited';
     game.guessesLeft = 0;
 
-    await db.game_status.create({
+    db.game_status.create({
       data: {
         game_id:         gameId,
         guess_number:    game.guesses.length + 1,
@@ -57,9 +57,19 @@ export async function POST(req: NextRequest, { params }: Params) {
         object_uuid:     game.objectId,
         is_correct:      false,
       },
-    });
+    }).catch(console.error);
 
-    return NextResponse.json({ gameStatus: 'forfeited', guessesLeft: 0 });
+    return NextResponse.json({
+      gameStatus:  'forfeited',
+      guessesLeft: 0,
+      artifact: {
+        country:   game.artifactIso3,
+        beginYear: game.artifactBeginYear,
+        endYear:   game.artifactEndYear,
+        title:     game.title,
+        imageUrl:  game.imageUrl,
+      },
+    });
   }
 
   // ── Validate guess fields ─────────────────────────────────────────────────
@@ -120,12 +130,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // ── Update in-memory state ────────────────────────────────────────────────
   game.guesses.push(record);
-  game.guessesLeft = MAX_GUESSES - game.guesses.length;
   game.status = won
     ? 'won'
-    : game.guessesLeft === 0
+    : game.guesses.length >= MAX_GUESSES
     ? 'lost'
     : 'active';
+  game.guessesLeft = game.status === 'lost' || game.status === 'forfeited'
+    ? 0
+    : MAX_GUESSES - game.guesses.length;
 
   // ── Audit log (fire-and-forget) ───────────────────────────────────────────
   db.game_status.create({
@@ -141,6 +153,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     },
   }).catch(console.error);
 
+  const reveal = game.status !== 'active'
+    ? {
+        country:   game.artifactIso3,
+        beginYear: game.artifactBeginYear,
+        endYear:   game.artifactEndYear,
+        title:     game.title,
+        imageUrl:  game.imageUrl,
+      }
+    : undefined;
+
   return NextResponse.json({
     guessNumber:  record.guessNumber,
     guessesLeft:  game.guessesLeft,
@@ -152,5 +174,6 @@ export async function POST(req: NextRequest, { params }: Params) {
       // display:    record.geoDisplay, T
     },
     year: { hint },
+    ...(reveal && { artifact: reveal }),
   });
 }
