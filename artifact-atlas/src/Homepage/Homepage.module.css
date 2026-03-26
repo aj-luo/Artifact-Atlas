@@ -1,0 +1,36 @@
+.home {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    height: 100%;
+}
+
+.tagline {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0;
+    letter-spacing: 0.03em;
+}
+
+.start_button {
+    border-radius: 10px;
+    height: 52px;
+    width: 160px;
+    background: transparent;
+    border: 0.5px solid white;
+    color: white;
+    font-family: inherit;
+    font-weight: 900;
+    font-size: 1.1rem;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.2s ease-in-out;
+}
+
+.start_button:hover {
+    background-color: #181818;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
