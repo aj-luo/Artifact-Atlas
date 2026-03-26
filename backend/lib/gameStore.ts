@@ -20,6 +20,7 @@ export type GameState = {
   artifactEndYear:   number;  // negative = BC
   imageUrl:         string;
   title:            string | null;
+  linkResource:     string | null;
   guesses:          GuessRecord[];
   status:           'active' | 'won' | 'lost' | 'forfeited';
   guessesLeft:      number;
