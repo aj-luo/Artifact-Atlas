@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import Footer from './Footer/Footer.jsx'
 import Gamescreen from './Gamescreen/Gamescreen.jsx'
+import Homepage from './Homepage/Homepage.jsx'
 import logo from './assets/AA_logo.png'
 import hdlogo from './assets/half-dome-logo.png'
 
 function App() {
+  const [started, setStarted] = useState(false);
 
   return (
     <>
@@ -18,12 +21,13 @@ function App() {
 
         </div>
         <div className='item2'>
-          <Gamescreen>
-          </Gamescreen>
+          {started
+            ? <Gamescreen />
+            : <Homepage onStart={() => setStarted(true)} />
+          }
         </div>
         <div className='item3'>
-          <Footer>
-          </Footer>
+          <Footer />
         </div>
      </div>
     </>

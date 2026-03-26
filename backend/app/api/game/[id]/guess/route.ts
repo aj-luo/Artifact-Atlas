@@ -63,11 +63,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       gameStatus:  'forfeited',
       guessesLeft: 0,
       artifact: {
-        country:   game.artifactIso3,
-        beginYear: game.artifactBeginYear,
-        endYear:   game.artifactEndYear,
-        title:     game.title,
-        imageUrl:  game.imageUrl,
+        country:      game.artifactIso3,
+        beginYear:    game.artifactBeginYear,
+        endYear:      game.artifactEndYear,
+        title:        game.title,
+        imageUrl:     game.imageUrl,
+        linkResource: game.linkResource,
       },
     });
   }
@@ -121,7 +122,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     country:     guessedIso3,
     year:        Number(year),
     bearing:     parseFloat(bear.toFixed(3)),
-    cardinal:    get_cardinal_from_bearing(bear),
+    cardinal:    isSameCountry ? '' : get_cardinal_from_bearing(bear),
     distanceKm:  Math.round(distKm),
     geoDisplay:  isSameCountry ? '0.000°, 0km' : `${bear.toFixed(3)}°, ${Math.round(distKm)}km`,
     yearHint:    hint,
@@ -155,11 +156,12 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const reveal = game.status !== 'active'
     ? {
-        country:   game.artifactIso3,
-        beginYear: game.artifactBeginYear,
-        endYear:   game.artifactEndYear,
-        title:     game.title,
-        imageUrl:  game.imageUrl,
+        country:      game.artifactIso3,
+        beginYear:    game.artifactBeginYear,
+        endYear:      game.artifactEndYear,
+        title:        game.title,
+        imageUrl:     game.imageUrl,
+        linkResource: game.linkResource,
       }
     : undefined;
 
