@@ -68,7 +68,7 @@ function Gamescreen() {
                         <li key={i}>
                             <div className={styles.guess}>
                                 <Flag code={guess.country} style={{ width: 24, marginRight: 6, verticalAlign: 'middle' }} />
-                                {guess.year} | {guess.distanceKm === 0 ? '✓' : `${guess.cardinal} ${guess.distanceKm} km`} | ⏰ {guess.yearHint}
+                                {guess.year} | {guess.countryCorrect ? '✓' : `${guess.cardinal} ${guess.distanceKm} km`} | ⏰ {guess.yearHint}
                             </div>
                         </li>
                     ))}
