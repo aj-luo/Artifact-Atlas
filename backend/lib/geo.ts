@@ -38,16 +38,16 @@ export function distanceKm(
 }
 
 /**
- * "Older" | "Younger" | "Correct"
+ * "Too Early" | "Too Late" | "Correct"
  *
- * Correct  — guessed year falls within [beginYear - 5, endYear + 5]
- * Younger  — guess is too early  (artifact is more recent than the guess)
- * Older    — guess is too late   (artifact is older than the guess)
+ * Correct   — guessed year falls within [beginYear - 5, endYear + 5]
+ * Too Early — guess is before the artifact's era  (guess < beginYear - 5)
+ * Too Late  — guess is after the artifact's era   (guess > endYear + 5)
  *
  * Negative years = BC (e.g. -500 = 500 BC).
  * beginYear is always ≤ endYear (caller must ensure this).
  */
 export function yearHint(beginYear: number, endYear: number, guessedYear: number): string {
   if (guessedYear >= beginYear - 5 && guessedYear <= endYear + 5) return 'Correct';
-  return guessedYear < beginYear ? 'Younger' : 'Older';
+  return guessedYear < beginYear ? 'Too Early' : 'Too Late';
 }

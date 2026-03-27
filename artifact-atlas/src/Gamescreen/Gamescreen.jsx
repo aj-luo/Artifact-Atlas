@@ -2,6 +2,7 @@ import styles from './Gamescreen.module.css'
 import React, { useState, useEffect, useRef } from 'react';
 import Gameselectors from '../Gameselectors/Gameselectors.jsx'
 import Finishdisplay  from '../Finishdisplay/Finishdisplay.jsx';
+import Flag from 'react-world-flags';
 
 
 function Gamescreen() {
@@ -66,7 +67,8 @@ function Gamescreen() {
                     {guesses.map((guess, i) => (
                         <li key={i}>
                             <div className={styles.guess}>
-                                {guess.country} {guess.year} | {guess.distanceKm === 0 ? '✓' : `${guess.cardinal} ${guess.distanceKm} km`} | ⏰ {guess.yearHint}
+                                <Flag code={guess.country} style={{ width: 24, marginRight: 6, verticalAlign: 'middle' }} />
+                                {guess.year} | {guess.countryCorrect ? '✓' : `${guess.cardinal} ${guess.distanceKm} km`} | ⏰ {guess.yearHint}
                             </div>
                         </li>
                     ))}

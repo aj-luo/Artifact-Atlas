@@ -170,10 +170,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     guessesLeft:  game.guessesLeft,
     gameStatus:   game.status,
     geo: {
-      //bearing:    record.bearing,
-      cardinal:   record.cardinal,
-      distanceKm: record.distanceKm,
-      // display:    record.geoDisplay, T
+      countryCorrect: isSameCountry,
+      cardinal:       record.cardinal,
+      distanceKm:     record.distanceKm,
     },
     year: { hint },
     ...(reveal && { artifact: reveal }),

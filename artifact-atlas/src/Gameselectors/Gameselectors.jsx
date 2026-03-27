@@ -48,11 +48,13 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
                     year: selectedYear
                 })
             })
+            if (!response.ok) return;
             const data = await response.json()
 
             setGuesses(prev => [...prev, {
                 country: selectedCountry,
                 year: selectedYear,
+                countryCorrect: data.geo?.countryCorrect ?? false,
                 cardinal: data.geo?.cardinal ?? '',
                 distanceKm: data.geo?.distanceKm ?? 0,
                 yearHint: data.year?.hint ?? ''
