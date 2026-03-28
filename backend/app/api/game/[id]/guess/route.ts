@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { getCapitals } from '@/lib/capitals';
-import { bearing, yearHint } from '@/lib/geo';
+import { bearing, distanceKm, yearHint } from '@/lib/geo';
 import { gameStore, pairCache, MAX_GUESSES, type GuessRecord } from '@/lib/gameStore';
 
 type Params = { params: Promise<{ id: string }> };
@@ -104,9 +104,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         getCapitals(),
       ]);
 
-      distKm = entry?.distcap ?? 0;
       const from = capitals.get(guessedIso3);
       const to   = capitals.get(game.artifactIso3);
+      distKm = entry?.distcap
+        ?? (from && to ? distanceKm(from.lat, from.lng, to.lat, to.lng) : 0);
       if (from && to) bear = bearing(from.lat, from.lng, to.lat, to.lng);
 
       pairCache.set(key, { distKm, bear });
