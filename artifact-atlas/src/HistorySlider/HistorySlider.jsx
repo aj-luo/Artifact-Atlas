@@ -57,7 +57,7 @@ const HistorySlider = ({ value, onYearChange }) => {
 
         <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', marginTop: '8px', fontSize: '12px', color: '#94a3b8' }}>
           <span style={{ flex: 1, textAlign: 'left' }}>Ancient Era</span>
-          <span style={{ flex: 1, textAlign: 'center' }}>Middle Ages</span>
+          <span style={{ flex: 1, textAlign: 'center' }}>Year 0</span>
           <span style={{ flex: 1, textAlign: 'right' }}>Modern Era</span>
         </div>
         </div>

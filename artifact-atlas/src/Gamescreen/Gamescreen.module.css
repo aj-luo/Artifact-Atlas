@@ -14,6 +14,7 @@
     margin-left: 30px;
     margin-top: 10px;
     max-width: 600px;
+    max-height: 800px;
     align-self: center;
 }
 
@@ -38,6 +39,16 @@
 .guess {
     border-radius: 20px;
     background-color: #1a1919;
+    width: 400px;
+    height: 50px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.guess_placeholder {
+    border-radius: 20px;
+    background-color: #4a4a4a;
     width: 400px;
     height: 50px;
     display: flex;

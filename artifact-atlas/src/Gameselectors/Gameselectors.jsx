@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import ReactFlagsSelect from "react-flags-select";
 import countries from 'i18n-iso-countries'
 import enLocale from 'i18n-iso-countries/langs/en.json'
+import loading from '../assets/loading.gif'
 
 countries.registerLocale(enLocale)
 
@@ -15,6 +16,10 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
     const [selectedYear, setSelectedYear] = useState(currentYear);
 
     const [yearInput, setYearInput] = useState(String(currentYear));
+
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [isForfetting, setIsForfetting] = useState(false);
 
     const handleYearInputChange = (e) => {
         setYearInput(e.target.value);
@@ -37,6 +42,7 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
         const alpha3 = countries.alpha2ToAlpha3(selectedCountry);
         if (!alpha3) return;
 
+        setIsSubmitting(true);
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL}/api/game/${gameId}/guess`, {
                 method: 'POST',
@@ -68,11 +74,16 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
         catch (error) {
             console.log(error)
         }
+        finally {
+            setIsSubmitting(false);
+        }
     }
 
     //API call to give up, this will display the answer and render the page to have a next button
     const handleForfeit = async () => {
         if (!gameId) return;
+
+        setIsForfetting(true);
         try {
             const response = await fetch(`${import.meta.env.VITE_API_URL}/api/game/${gameId}/guess`, {
                 method: 'POST',
@@ -84,6 +95,9 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
         }
         catch (error) {
             console.log(error)
+        }
+        finally {
+            setIsForfetting(false);
         }
         setGameStatus("lost");
     }
@@ -135,11 +149,11 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
                     className={styles.yearInput}
                 />
                 <div className={styles.buttons}>
-                    <button className={styles.game_button} onClick={handleSubmit}>
-                        Submit
+                    <button className={styles.game_button} onClick={handleSubmit} disabled={isSubmitting}>
+                        {isSubmitting ? <img className={styles.loading}src={loading} alt="Loading..." /> : "Submit 🚀"}
                     </button>
-                    <button className={styles.game_button} onClick={handleForfeit}>
-                        Forfeit
+                    <button className={styles.game_button} onClick={handleForfeit} disabled={isForfetting}>
+                        {isForfetting ? <img className={styles.loading}src={loading} alt="Loading..." /> : "Forfeit 🏳️"}
                     </button>
                 </div>
             </div>

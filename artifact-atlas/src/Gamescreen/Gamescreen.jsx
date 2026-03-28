@@ -7,6 +7,8 @@ import Flag from 'react-world-flags';
 
 function Gamescreen() {
 
+    const MAX_GUESSES = 5;
+
     const [gameStatus, setGameStatus] = useState("active"); // possible values: "active", "won", "lost"
     const [gameId, setGameId] = useState(null);
     const [imageUrl, setImageUrl] = useState(null);
@@ -34,12 +36,16 @@ function Gamescreen() {
 
     const handleNewGame = async () => {
         gameStarted.current = false;
-        setGameId(null);
-        setImageUrl(null);
-        setGuesses([]);
-        setArtifact(null);
-        setGameStatus("active");
-        await handleStartGame();
+        // keep current screen visible while loading new game
+        try {
+            await handleStartGame();
+            setGuesses([]);
+            setArtifact(null);
+            setGameStatus("active");
+        } catch (error) {
+            console.log(error);
+            // keep old state if new game fails
+        }
     }
 
     useEffect(() => {
@@ -64,14 +70,21 @@ function Gamescreen() {
             )}
             <div className={styles.guesses}>
                 <ul className={styles.guess_list}>
-                    {guesses.map((guess, i) => (
-                        <li key={i}>
-                            <div className={styles.guess}>
-                                <Flag code={guess.country} style={{ width: 24, marginRight: 6, verticalAlign: 'middle' }} />
-                                {guess.year} | {guess.countryCorrect ? '✓' : `${guess.cardinal} ${guess.distanceKm} km`} | ⏰ {guess.yearHint}
-                            </div>
-                        </li>
-                    ))}
+                    {Array.from({ length: MAX_GUESSES }).map((_, i) => {
+                        const guess = guesses[i];
+                        return (
+                            <li key={i}>
+                                {guess ? (
+                                    <div className={styles.guess}>
+                                        <Flag code={guess.country} style={{ width: 24, marginRight: 6, verticalAlign: 'middle' }} />
+                                        {guess.year} | {guess.countryCorrect ? '✓' : `${guess.cardinal} ${guess.distanceKm} km`} | ⏰ {guess.yearHint}
+                                    </div>
+                                ) : (
+                                    <div className={styles.guess_placeholder}></div>
+                                )}
+                            </li>
+                        );
+                    })}
                 </ul>
             </div>
         </div>
