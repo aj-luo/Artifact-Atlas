@@ -150,3 +150,21 @@
 .sendButton:hover {
     background-color: #0056b3;
 }
+
+.sendButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.checkboxLabel {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    font-size: 0.95rem;
+}
+
+.errorText {
+    color: #ff6b6b;
+    font-size: 0.85rem;
+    margin: 8px 0 0;
+}
