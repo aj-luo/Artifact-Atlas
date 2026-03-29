@@ -157,6 +157,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const reveal = game.status !== 'active'
     ? {
+        objectId:     game.objectId.toString(),
         country:      game.artifactIso3,
         beginYear:    game.artifactBeginYear,
         endYear:      game.artifactEndYear,
