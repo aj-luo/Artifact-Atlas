@@ -55,10 +55,14 @@
     color: white;
     font-size: 16px;
     text-align: center;
-    margin-top: 8px;
+    margin-top: 20px;
 }
 
 .yearInput::-webkit-inner-spin-button,
 .yearInput::-webkit-outer-spin-button {
     opacity: 1;
+}
+
+.loading {
+    height: 20px;
 }
