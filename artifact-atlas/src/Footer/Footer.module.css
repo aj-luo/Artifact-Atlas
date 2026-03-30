@@ -5,18 +5,23 @@ footer {
 
 .footer_container {
     display: flex;
-    flex-direction: column; 
-    justify-content: center;  
+    flex-direction: row; 
+    justify-content: flex-end;  
     align-items: center;
     position: relative;      
 }
 
-.footer_center {
+.footer_left {
     display: flex;
     flex-direction: column;
     align-items: center;
 }
 
+.footer_right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
 
 footer ul{
     display: flex; 
