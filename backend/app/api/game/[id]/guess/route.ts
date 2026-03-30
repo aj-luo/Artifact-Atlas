@@ -63,6 +63,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       gameStatus:  'forfeited',
       guessesLeft: 0,
       artifact: {
+        objectId:     game.objectId.toString(),
         country:      game.artifactIso3,
         beginYear:    game.artifactBeginYear,
         endYear:      game.artifactEndYear,
@@ -91,10 +92,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     const key    = `${guessedIso3}->${game.artifactIso3}`;
     const cached = pairCache.get(key);
 
+    console.log(`[geo] gameId=${gameId} guessedIso3=${guessedIso3} artifactIso3=${game.artifactIso3}`);
+
     if (cached) {
       distKm = cached.distKm;
       bear   = cached.bear;
+      console.log(`[geo] pairCache HIT  key=${key}  distKm=${distKm} bear=${bear}`);
     } else {
+      console.log(`[geo] pairCache MISS key=${key}`);
+
       // Fetch DistMatrix and capitals in parallel on cache miss
       const [entry, capitals] = await Promise.all([
         db.distMatrix.findUnique({
@@ -104,11 +110,23 @@ export async function POST(req: NextRequest, { params }: Params) {
         getCapitals(),
       ]);
 
+      console.log(`[geo] distMatrix result: ${entry?.distcap ?? 'null'}`);
+
       const from = capitals.get(guessedIso3);
       const to   = capitals.get(game.artifactIso3);
-      distKm = entry?.distcap
-        ?? (from && to ? distanceKm(from.lat, from.lng, to.lat, to.lng) : 0);
-      if (from && to) bear = bearing(from.lat, from.lng, to.lat, to.lng);
+      console.log(`[geo] capitals from=${from ? `${guessedIso3}(${from.name})` : 'MISSING'} to=${to ? `${game.artifactIso3}(${to.name})` : 'MISSING'}`);
+
+      if (entry?.distcap != null) {
+        distKm = entry.distcap;
+        if (from && to) bear = bearing(from.lat, from.lng, to.lat, to.lng);
+        console.log(`[geo] distMatrix used → distKm=${distKm} bear=${bear}`);
+      } else if (from && to) {
+        distKm = distanceKm(from.lat, from.lng, to.lat, to.lng);
+        bear   = bearing(from.lat, from.lng, to.lat, to.lng);
+        console.log(`[geo] fallback calc used → distKm=${distKm} bear=${bear}`);
+      } else {
+        console.warn(`[geo] WARN: both lookups failed for ${key} → distKm=0 bear=0 (will be cached!)`);
+      }
 
       pairCache.set(key, { distKm, bear });
     }
@@ -157,6 +175,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const reveal = game.status !== 'active'
     ? {
+        objectId:     game.objectId.toString(),
         country:      game.artifactIso3,
         beginYear:    game.artifactBeginYear,
         endYear:      game.artifactEndYear,
