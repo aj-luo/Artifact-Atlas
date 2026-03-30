@@ -123,14 +123,6 @@ function Finishdisplay({status, onNewGame, artifact, gameId}) {
                 <button className={styles.game_button} onClick={() => setModal(true)} disabled={!artifact?.objectId}>
                     Flag 🚩
                 </button>
-                {artifact && (
-                    <button
-                        className={styles.game_button}
-                        onClick={() => { setShowReport(v => !v); setReportStatus(null); }}
-                    >
-                        Flag
-                    </button>
-                )}
             </div>
 
             {showReport && (
@@ -223,15 +215,6 @@ function Finishdisplay({status, onNewGame, artifact, gameId}) {
                         </button>
                       </form>
                     )}
-
-                    <form className={styles.form} action="https://formspree.io/f/xaqdyelz" method="POST">
-                      <div className={styles.inputContainer}>
-                        <input type="text" placeholder="Name" name="name" className={styles.inputField} required/>
-                        <input type="email" placeholder="Email" name="email" className={styles.inputField} required/>
-                        <textarea className={`${styles.inputField} ${styles.messageField}`} placeholder="Message" name="message" required></textarea>
-                      </div>
-                      <button type="submit" className={styles.sendButton}>SEND</button>
-                    </form>
                   </div>
                 </div>
               )}
