@@ -1,0 +1,182 @@
+body {
+  margin: 0;
+}
+
+body * {
+    text-transform: uppercase;
+}
+
+.approot {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;       
+    min-height: 100vh;
+    background-color: #242424; 
+}
+
+.approot::before {
+    content: "";                    
+    position: absolute;
+    inset: 0;                       
+    background-image: url(../assets/background_monogram.png);
+    background-repeat: repeat;
+    background-size: 800px 600px;
+    opacity: 0.25;                  
+    pointer-events: none;                           
+}
+
+.approot > * {
+    position: relative;
+    z-index: 1;
+}
+
+.block {
+    background-color: #242424;
+    margin: 0 auto;
+    border: 6px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    width: 60vw;
+    height: 80vh;
+    min-height: 600px; 
+    max-height: 800px; 
+    min-width: 300px;
+    max-width: 2000px;
+    /* Added overflow-y to handle cases where boxes leak vertically */
+    overflow-y: auto; 
+}
+
+.container {
+    display: grid;
+    grid-template-rows: auto 1fr; /* Changed 0.3fr to auto to fit button */
+    grid-template-columns: 1fr 1fr 1fr;
+    height: 100%;
+    width: 100%;
+    padding-bottom: 20px; /* Added padding to bottom */
+    padding-top: 40px;
+}
+
+.homeButton, .videoButton {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 10px;
+}
+
+.homeButton a,
+.videoButton a {
+    text-decoration: none;
+}
+
+.Buttons {
+    /* CHANGED TO rem/relative units */
+    height: 7rem;
+    width: 10rem;
+    padding: 1rem;
+    border-radius: 20px;
+    background-color: #242424;
+    border: 3px rgba(3, 3, 3, 0.15) solid;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    color: white;
+    font-family: "Nunito", sans-serif;
+    font-weight: bold;
+    font-size: 1rem; /* Scales with zoom */
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+}
+
+.Buttons img {
+    /* Ensure icons scale */
+    width: 2rem;
+    height: auto;
+}
+
+.Buttons h4 {
+    margin: 0;
+    font-size: 0.9rem;
+}
+
+.Buttons:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.title {
+    grid-column: 2 / 3;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    color: white;
+    font-family: "Nunito", sans-serif;
+}
+
+.title h1 {
+    font-size: 2.5rem; /* Relative size */
+    margin: 0;
+}
+
+.content {
+    grid-row: 2 / 3;
+    grid-column: 1 / 4;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: white;
+    font-weight: bold;
+    font-family: "Nunito", sans-serif;
+    font-weight: 900;
+    padding: 20px;
+}
+
+.steps {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px; /* Use gap instead of margin for spacing */
+    width: 100%;
+}
+
+.steps div {
+    /* REMOVED MARGIN, using gap instead */
+    border: 6px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    padding: 1.5rem;
+    /* Added min-width and max-width */
+    min-width: 250px;
+    max-width: 300px;
+    height: 250px; /* Fixed height for consistency */
+}
+
+.instruction_box {
+  display: flex;
+  flex-direction: column; /* Stack text over image */
+  align-items: center;    /* Center them horizontally */
+  justify-content: space-between; /* Pushes text to top, image to bottom */
+  text-align: center;
+  overflow: hidden; /* Prevent text leakage */
+}
+
+.instruction_box p {
+  font-size: 1rem;
+  margin: 0;
+  flex-grow: 1; /* Pushes image to bottom */
+}
+
+.instruction_box img {
+  display: block;
+  object-fit: contain;    /* Keeps image proportions clean */
+  width: 4rem; /* Scalable image size */
+  height: auto;
+  margin-top: 10px;
+}
