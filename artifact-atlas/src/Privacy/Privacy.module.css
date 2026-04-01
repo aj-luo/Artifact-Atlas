@@ -1,0 +1,109 @@
+.approot {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;       
+    min-height: 100vh;
+    background-color: #242424; 
+}
+
+.approot::before {
+    content: "";                       
+    position: absolute;
+    inset: 0;                           
+    background-image: url(../assets/background_monogram.png);
+    background-repeat: repeat;
+    background-size: 800px 600px;
+    opacity: 0.25;                    
+    pointer-events: none;                                   
+}
+
+.approot > * {
+    position: relative;
+    z-index: 1;
+}
+
+.block {
+    background-color: #242424;
+    width: 60vw;
+    height: 80vh;
+    margin: 0 auto;
+    border: 6px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    min-width: 300px;
+    max-width: 2000px;
+    max-height: 1200px;
+    min-height: 600px;
+}
+
+.container {
+    display: grid;
+    grid-template-rows: 0.3fr 1fr 0.2fr;
+    grid-template-columns: 0.5fr 1fr 1fr 1fr 0.5fr;
+    height: 100%;
+    width: 100%;
+}
+
+.title {
+    grid-row-start: 1;
+    grid-row-end: 2;
+    grid-column-start: 2;
+    grid-column-end: 5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    font-family: "Nunito", sans-serif;
+}
+
+.content {
+    border: 6px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    display: block; 
+    overflow-x: hidden;
+    overflow-y: auto; 
+    padding: 20px;
+    grid-row: 2 / 3;
+    grid-column: 2 / 5;
+    min-height: 0;
+    color: white;
+    font-family: sans-serif;
+}
+
+.homeButton {
+    grid-row-start: 1;
+    grid-row-end: 2;
+    grid-column-start: 1;
+    grid-column-end: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.Buttons {
+    height: 110px;
+    width: 150px;
+    padding: 15px;
+    border-radius: 20px;
+    background-color: #242424;
+    border: 3px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    color: white;
+    font-family: "Nunito", sans-serif;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.Buttons:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}

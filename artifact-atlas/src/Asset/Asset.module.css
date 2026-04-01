@@ -1,0 +1,162 @@
+.approot {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;        
+    min-height: 100vh;
+    background-color: #242424; 
+}
+
+.approot::before {
+    content: "";                    
+    position: absolute;
+    inset: 0;                       
+    background-image: url(../assets/background_monogram.png);
+    background-repeat: repeat;
+    background-size: 800px 600px;
+    opacity: 0.25;                  
+    pointer-events: none;                           
+}
+
+.approot > * {
+    position: relative;
+    z-index: 1;
+}
+
+.block {
+    background-color: #242424;
+    width: 60vw;
+    height: 80vh;
+    min-height: 600px; 
+    max-height: 800px; 
+    margin: 0 auto;
+    border: 6px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    min-width: 300px;
+    max-width: 2000px;
+}
+
+.container {
+    display: grid;
+    /* Slightly adjusted rows to give more room to assets */
+    grid-template-rows: 1fr 1fr 1fr 0.1fr;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 10px;
+    height: 100%;
+    width: 100%;
+    color: white;
+    font-family: "Nunito", sans-serif;
+}
+
+.title {
+    grid-row-start: 1;
+    grid-row-end: 2;
+    grid-column-start: 2;
+    grid-column-end: 5;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-weight: bold;
+    color: white;
+    text-align: center;
+    font-family: "Nunito", sans-serif;
+}
+
+.logo {
+    border: 3px rgba(255, 255, 255, 0.15) solid;
+    border-radius: 20px;     /* Changed from 100% to give a little breathing room */
+    max-height: 250px;   /* Increased significantly from 80px */
+    height: auto;
+    object-fit: contain;
+    margin: 10px 0;      /* Adds consistent spacing between title and button */
+}
+
+/* 2. Adjust the asset2 container to handle the larger content */
+.asset2 {
+    grid-column-start: 2;
+    grid-column-end: 5;
+    grid-row-start: 2;    /* Expanded to start at row 2 instead of 3 */
+    grid-row-end: 4;      /* Keeps it ending at row 4 */
+    
+    display: flex;
+    flex-direction: column; 
+    align-items: center;    
+    justify-content: center; 
+    border: 6px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    padding: 20px;        /* Increased padding for a cleaner look */
+    overflow: hidden;
+}
+
+.asset2 h2 {
+    font-size: 1.2rem; /* Ensure text fits */
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.monogram, .logo {
+    border: 3px rgba(255, 255, 255, 0.15) solid;
+    border-radius: 20px;
+    max-width: 100%;
+    /* Reduced max-height to leave room for text */
+    max-height: 80px; 
+    height: auto;
+    object-fit: contain; 
+}
+
+.homeButton {
+    grid-row-start: 1;
+    grid-row-end: 2;
+    grid-column-start: 1;
+    grid-column-end: 2;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-decoration: none;
+}
+
+.Buttons {
+    height: 110px;
+    width: 150px;
+    padding: 15px;
+    border-radius: 20px;
+    background-color: #242424;
+    border: 3px rgba(3, 3, 3, 0.15) solid;
+    border-radius: 20px;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    color: white;
+    font-family: "Nunito", sans-serif;
+    font-weight: bold;
+    font-size: 15px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+.Buttons:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.downloadButton {
+    margin-top: 10px;
+    width: 60px;
+    height: 40px;
+    border-radius: 15px;
+    background-color: #242424;
+    border: 3px rgba(3, 3, 3, 0.15) solid;
+    box-sizing: border-box;
+    box-shadow: inset 0px 2px 0px 0px rgba(255, 255, 255, .15), 0px 3px 0px 0px rgba(255, 255, 255, .15);
+    transition: background-color 0.3s ease;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.downloadButton:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
