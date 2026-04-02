@@ -1,4 +1,5 @@
 import styles from './List.module.css';
+import Link from 'next/link';
 import { useState, useEffect } from 'react'; 
 import x_icon from '../assets/x-mark.png';
 
@@ -30,13 +31,13 @@ function List() {
     return (
         <>
         <ul className={styles.list}>
-            <li><a href="/tos" target='_blank' rel='noreferrer'>T.O.S.</a></li>
+          <li><Link href="/tos" target='_blank' rel='noreferrer'>T.O.S.</Link></li>
             <li>|</li>
-            <li><a href="/privacy" target='_blank' rel='noreferrer'>PRIVACY</a></li>
+          <li><Link href="/privacy" target='_blank' rel='noreferrer'>PRIVACY</Link></li>
             <li>|</li>
-            <li><a href="/assets" target='_blank' rel='noreferrer'>ASSETS</a></li>
+          <li><Link href="/assets" target='_blank' rel='noreferrer'>ASSETS</Link></li>
             <li>|</li>
-            <li><a href="/instructions" target='_blank' rel='noreferrer'>INSTRUCTIONS</a></li>
+          <li><Link href="/instructions" target='_blank' rel='noreferrer'>INSTRUCTIONS</Link></li>
             <li>|</li>
             <li onClick={toggleModal} style={{cursor: 'pointer'}}>CONTACT</li>
         </ul>
@@ -54,7 +55,7 @@ function List() {
               <textarea className={`${styles.inputField} ${styles.messageField}`} placeholder="Message" name="message" required></textarea>
               </div>
               <button className={styles.closeModal} onClick={toggleModal}>
-                <img className={styles.closeIcon}  src={x_icon} alt="Close" />
+                <img className={styles.closeIcon}  src={x_icon.src} alt="Close" />
               </button>
               <button type="submit" className={styles.sendButton}>SEND</button>
             </form>

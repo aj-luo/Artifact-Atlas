@@ -7,7 +7,7 @@ function Homepage({ onStart, isLoading }) {
             <p className={styles.tagline}>IDENTITY ARTIFACTS FROM AROUND THE WORLD!</p>
 
             <button className={styles.start_button} onClick={onStart} disabled={isLoading}>
-                {isLoading ? <img src={loading} alt="Loading..." className={styles.loadingIcon} /> : 'Play'}
+                {isLoading ? <img src={loading.src} alt="Loading..." className={styles.loadingIcon} /> : 'Play'}
             </button>
             
             <div className={styles.videoContainer}>

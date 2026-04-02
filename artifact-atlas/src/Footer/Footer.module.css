@@ -1,4 +1,4 @@
-footer {
+.footer_root {
   text-transform: uppercase;
   color: white;
 }
@@ -23,19 +23,19 @@ footer {
     gap: 10px;
 }
 
-footer ul{
+.footer_root ul{
     display: flex; 
     list-style: none;
     text-decoration: none;
     font-size: 15px;
 }
 
-footer a {
+.footer_root a {
     text-decoration: none;
     color: white;
 }
 
-footer p {
+.footer_root p {
     margin-top: 20px;
     font-family: sans-serif;
     text-align: center;

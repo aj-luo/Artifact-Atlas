@@ -19,6 +19,7 @@ function Gamescreen() {
         NW: '↖️'
     }
 
+
     const MAX_GUESSES = 5;
 
     const [gameStatus, setGameStatus] = useState("active"); // possible values: "active", "won", "lost"
@@ -30,11 +31,12 @@ function Gamescreen() {
     // Prevents React StrictMode double-invocation from creating two games
     const gameStarted = useRef(false);
 
+
     const handleStartGame = async () => {
         if (gameStarted.current) return;
         gameStarted.current = true;
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/game/new`, {
+            const response = await fetch('/api/game/new', {
                 method: 'POST'
             })
             const data = await response.json()
@@ -62,6 +64,19 @@ function Gamescreen() {
 
     useEffect(() => {
         handleStartGame();
+    }, [])
+
+    //when the page reloads, load the game state from localStorage
+    useEffect(()=> {
+        const savedGameStatus = window.localStorage.getItem('gameStatus');
+        const savedGuesses = JSON.parse(window.localStorage.getItem('guesses'));
+        const savedGameId = window.localStorage.getItem('gameId');
+        const savedArtifact = JSON.parse(window.localStorage.getItem('artifact'));
+
+        if (savedGameStatus) setGameStatus(savedGameStatus);
+        if (savedGuesses) setGuesses(savedGuesses);
+        if (savedGameId) setGameId(savedGameId);
+        if (savedArtifact) setArtifact(savedArtifact);
     }, [])
 
 

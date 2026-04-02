@@ -44,7 +44,7 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/game/${gameId}/guess`, {
+            const response = await fetch(`/api/game/${gameId}/guess`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -85,7 +85,7 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
 
         setIsForfetting(true);
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/api/game/${gameId}/guess`, {
+            const response = await fetch(`/api/game/${gameId}/guess`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ forfeit: true })
@@ -150,10 +150,10 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
                 />
                 <div className={styles.buttons}>
                     <button className={styles.game_button} onClick={handleSubmit} disabled={isSubmitting}>
-                        {isSubmitting ? <img className={styles.loading}src={loading} alt="Loading..." /> : "Submit 🚀"}
+                        {isSubmitting ? <img className={styles.loading}src={loading.src} alt="Loading..." /> : "Submit 🚀"}
                     </button>
                     <button className={styles.game_button} onClick={handleForfeit} disabled={isForfetting}>
-                        {isForfetting ? <img className={styles.loading}src={loading} alt="Loading..." /> : "Forfeit 🏳️"}
+                        {isForfetting ? <img className={styles.loading}src={loading.src} alt="Loading..." /> : "Forfeit 🏳️"}
                     </button>
                 </div>
             </div>

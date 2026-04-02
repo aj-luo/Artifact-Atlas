@@ -1,5 +1,4 @@
 import styles from './TOS.module.css';
-import { Link } from "react-router-dom";
 
 function TOS() {
     return (

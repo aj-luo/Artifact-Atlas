@@ -28,7 +28,7 @@ function Finishdisplay({status, onNewGame, artifact, gameId}) {
         if (!artifact?.objectId) return;
         setReportStatus('submitting');
         try {
-            const res = await fetch(`${import.meta.env.VITE_API_URL}/api/report`, {
+            const res = await fetch('/api/report', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -75,7 +75,7 @@ function Finishdisplay({status, onNewGame, artifact, gameId}) {
         console.log(flagData);
 
         try {
-            await fetch(`${import.meta.env.VITE_API_URL}/api/report`, {
+            await fetch('/api/report', {
                 method: 'POST',
                 body: JSON.stringify(flagData)
             });
@@ -118,7 +118,7 @@ function Finishdisplay({status, onNewGame, artifact, gameId}) {
             )}
             <div>
                 <button className={styles.game_button} onClick={handleNewGame} disabled={isNewGame}>
-                    {isNewGame ? <img src={loading} alt="Loading" className={styles.loadingIcon} /> : 'New Game 🕹️'}
+                    {isNewGame ? <img src={loading.src} alt="Loading" className={styles.loadingIcon} /> : 'New Game 🕹️'}
                 </button>
                 <button className={styles.game_button} onClick={() => setModal(true)} disabled={!artifact?.objectId}>
                     Flag 🚩
@@ -173,7 +173,7 @@ function Finishdisplay({status, onNewGame, artifact, gameId}) {
                 <div className={styles.modal} onClick={handleCloseModal}>
                   <div className={styles.modalContent} onClick={e => e.stopPropagation()}>
                     <button className={styles.closeModal} onClick={handleCloseModal}>
-                      <img className={styles.closeIcon} src={x_icon} alt="Close" />
+                                            <img className={styles.closeIcon} src={x_icon.src} alt="Close" />
                     </button>
                     <h2>Report Inaccuracy</h2>
 

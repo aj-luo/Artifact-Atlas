@@ -14,28 +14,28 @@ function Instruction() {
                     <div className={styles.title}>
                         <h1>Instructions</h1>
                     </div>
-                    <div className={styles.videoButton}><a href="https://www.youtube.com/watch?v=1A_unkC1Rxg" target="_blank"><button className={styles.Buttons}> <img src={youtube} width="40" height="30"></img> <h4>Tutorial</h4></button></a></div>
+                    <div className={styles.videoButton}><a href="https://www.youtube.com/watch?v=1A_unkC1Rxg" target="_blank" rel="noreferrer"><button className={styles.Buttons}> <img src={youtube.src} width="40" height="30"></img> <h4>Tutorial</h4></button></a></div>
                     <div className={styles.content}>
                         <div className={styles.steps}>
                             <div className={styles.instruction_box}>
                                 <p>Guess the country or origin and time period of an artifact!</p>
-                                <img src={question} alt="Question" />
+                                <img src={question.src} alt="Question" />
                             </div>
                             <div className={styles.instruction_box}>
                                 <p>You must guess the country and the year within the time range that it was created!</p>
-                                <img src={timezone} alt="Timezone" />
+                                <img src={timezone.src} alt="Timezone" />
                             </div>
                             <div className={styles.instruction_box}>
                                 <p>If your guess is incorrect, you will get a distance/year hint!</p>
-                                <img src={lightbulb} alt="Lightbulb" />
+                                <img src={lightbulb.src} alt="Lightbulb" />
                             </div>
                             <div className={styles.instruction_box}>
                                 <p>If you dont get the answer after 5 guesses, you lose!</p>
-                                <img src={sadface} alt="Sad Face" />
+                                <img src={sadface.src} alt="Sad Face" />
                             </div>
                             <div className={styles.instruction_box}>
                                 <p>If you are still unsure on instructions, go to the link at the top!</p>
-                                <img src={link} alt="Link" />
+                                <img src={link.src} alt="Link" />
                             </div>
                         </div>
                     </div>
