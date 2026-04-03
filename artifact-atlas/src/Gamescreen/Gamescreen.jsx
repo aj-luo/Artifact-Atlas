@@ -27,6 +27,7 @@ function Gamescreen() {
     const [imageUrl, setImageUrl] = useState(null);
     const [guesses, setGuesses] = useState([]);
     const [artifact, setArtifact] = useState(null);
+    const [lightboxOpen, setLightboxOpen] = useState(false);
 
     // Prevents React StrictMode double-invocation from creating two games
     const gameStarted = useRef(false);
@@ -80,6 +81,15 @@ function Gamescreen() {
     }, [])
 
 
+    const closeLightbox = () => setLightboxOpen(false);
+
+    useEffect(() => {
+        if (!lightboxOpen) return;
+        const handleKey = (e) => { if (e.key === 'Escape') closeLightbox(); };
+        document.addEventListener('keydown', handleKey);
+        return () => document.removeEventListener('keydown', handleKey);
+    }, [lightboxOpen]);
+
     return (
         <div className={styles.game_ui}>
             {imageUrl && (
@@ -87,11 +97,41 @@ function Gamescreen() {
                     key={imageUrl}
                     src={imageUrl} 
                     className={styles.image} 
-                    alt="Artifact"
+                    alt="Artifact — click to enlarge"
+                    title="Click to enlarge"
+                    onClick={() => setLightboxOpen(true)}
                     initial={{ opacity: 0, scale: 0.8 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 1, ease: "easeOut" }}
                 />
+            )}
+
+            {lightboxOpen && imageUrl && (
+                <motion.div
+                    className={styles.lightbox_overlay}
+                    onClick={closeLightbox}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    <motion.img
+                        src={imageUrl}
+                        className={styles.lightbox_image}
+                        alt="Artifact enlarged"
+                        onClick={(e) => e.stopPropagation()}
+                        initial={{ scale: 0.85, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 0.25, ease: "easeOut" }}
+                    />
+                    <button
+                        className={styles.lightbox_close}
+                        onClick={closeLightbox}
+                        aria-label="Close"
+                    >
+                        ✕
+                    </button>
+                </motion.div>
             )}
             {gameStatus === "active" && (
                 <motion.div

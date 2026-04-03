@@ -16,6 +16,51 @@
     max-width: 500px;
     max-height: 700px;
     align-self: center;
+    cursor: pointer;
+    transition: filter 0.2s ease;
+}
+
+.image:hover {
+    filter: brightness(1.08);
+}
+
+.lightbox_overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(6px);
+    cursor: pointer;
+}
+
+.lightbox_image {
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    border-radius: 12px;
+    cursor: default;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+}
+
+.lightbox_close {
+    position: absolute;
+    top: 20px;
+    right: 28px;
+    background: none;
+    border: none;
+    color: #fff;
+    font-size: 2rem;
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s ease;
+    line-height: 1;
+}
+
+.lightbox_close:hover {
+    opacity: 1;
 }
 
 
