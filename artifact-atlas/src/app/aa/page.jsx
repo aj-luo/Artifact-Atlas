@@ -1,11 +1,11 @@
 'use client'
 
 import { useState } from 'react'
-import Footer from '../Footer/Footer.jsx'
-import Gamescreen from '../Gamescreen/Gamescreen.jsx'
-import Homepage from '../Homepage/Homepage.jsx'
-import logo from '../assets/AA_logo.png'
-import halfdome from '../assets/half-dome-logo.png'
+import Footer from '../../Footer/Footer.jsx'
+import Gamescreen from '../../Gamescreen/Gamescreen.jsx'
+import Homepage from '../../Homepage/Homepage.jsx'
+import logo from '../../assets/AA_logo.png'
+import halfdome from '../../assets/half-dome-logo.png'
 
 export default function Home() {
   const [started, setStarted] = useState(false);
