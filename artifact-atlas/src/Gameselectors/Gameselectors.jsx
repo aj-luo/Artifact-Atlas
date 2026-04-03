@@ -102,12 +102,17 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
         setGameStatus("lost");
     }
 
+    const omittedCountries = ['AS', 'IO', 'CW', 'GG', 'GU', 'IM', 'JE', 'PS', 'SX', 'VI', 'AX', 'XK']; // example
+    const allCountries = Object.keys(countries.getNames('en')); // alpha-2 codes
+    const allowedCountries = allCountries.filter(code => !omittedCountries.includes(code)); 
+
     return (
             <div className={styles.selectors}>
                 <div className={styles.countryselector}>
                     <ReactFlagsSelect
                     selected={selectedCountry}
                     onSelect={(code) => setSelectedCountry(code)}
+                    countries={allowedCountries}
                     selectButtonClassName={styles.flagSelectButton}
                     customLabels={{
                         BN: "Brunei",
