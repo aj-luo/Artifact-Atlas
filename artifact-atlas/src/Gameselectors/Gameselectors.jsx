@@ -90,6 +90,7 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ forfeit: true })
             })
+            if (!response.ok) return;
             const data = await response.json()
             if (data.artifact) setArtifact(data.artifact);
         }
@@ -114,6 +115,8 @@ function Gameselectors({status, setGameStatus, gameId, setGuesses, setArtifact})
                     onSelect={(code) => setSelectedCountry(code)}
                     countries={allowedCountries}
                     selectButtonClassName={styles.flagSelectButton}
+                    blacklistCountries={true}
+                    countries={["AX"]}
                     customLabels={{
                         BN: "Brunei",
                         TL: "East Timor",

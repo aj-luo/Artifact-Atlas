@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { getCapitals } from '@/lib/capitals';
-import { bearing, distanceKm, yearHint } from '@/lib/geo';
-import { gameStore, pairCache, MAX_GUESSES, type GuessRecord } from '@/lib/gameStore';
+import { yearHint } from '@/lib/geo';
+import { getGeoForPair } from '@/lib/geoCache';
+import { getGame, setGame, MAX_GUESSES, type GuessRecord } from '@/lib/gameStore';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -23,10 +23,11 @@ function get_cardinal_from_bearing(b: number): string {
  * Normal guess: { "country": "CAN", "year": 1965 }
  * Forfeit:      { "forfeit": true }
  *
- * Game state is read from in-memory store.
- * DB is written to as an audit log only.
+ * Game state is read from and written to the active_games DB table.
+ * Geo pair distances are cached via Next.js Data Cache (persistent across restarts).
  */
 export async function POST(req: NextRequest, { params }: Params) {
+  try {
   const { id: gameId } = await params;
   const body = await req.json();
   const { country, year, forfeit } = body as {
@@ -35,8 +36,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     forfeit?: boolean;
   };
 
-  // ── Resolve game from memory ──────────────────────────────────────────────
-  const game = gameStore.get(gameId);
+  // ── Resolve game from DB ──────────────────────────────────────────────────
+  const game = await getGame(gameId);
   if (!game) {
     return NextResponse.json({ error: 'Game not found' }, { status: 404 });
   }
@@ -48,6 +49,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (forfeit) {
     game.status      = 'forfeited';
     game.guessesLeft = 0;
+    await setGame(game);
 
     db.game_status.create({
       data: {
@@ -85,51 +87,13 @@ export async function POST(req: NextRequest, { params }: Params) {
   const guessedIso3   = country.toUpperCase();
   const isSameCountry = guessedIso3 === game.artifactIso3;
 
-  // ── Geo: pair cache → DB + trig only on first miss ────────────────────────
+  // ── Geo: Data Cache-backed pair lookup ────────────────────────────────────
   let distKm = 0;
   let bear   = 0;
   if (!isSameCountry) {
-    const key    = `${guessedIso3}->${game.artifactIso3}`;
-    const cached = pairCache.get(key);
-
-    console.log(`[geo] gameId=${gameId} guessedIso3=${guessedIso3} artifactIso3=${game.artifactIso3}`);
-
-    if (cached) {
-      distKm = cached.distKm;
-      bear   = cached.bear;
-      console.log(`[geo] pairCache HIT  key=${key}  distKm=${distKm} bear=${bear}`);
-    } else {
-      console.log(`[geo] pairCache MISS key=${key}`);
-
-      // Fetch DistMatrix and capitals in parallel on cache miss
-      const [entry, capitals] = await Promise.all([
-        db.distMatrix.findUnique({
-          where:  { iso_o_iso_d: { iso_o: guessedIso3, iso_d: game.artifactIso3 } },
-          select: { distcap: true },
-        }),
-        getCapitals(),
-      ]);
-
-      console.log(`[geo] distMatrix result: ${entry?.distcap ?? 'null'}`);
-
-      const from = capitals.get(guessedIso3);
-      const to   = capitals.get(game.artifactIso3);
-      console.log(`[geo] capitals from=${from ? `${guessedIso3}(${from.name})` : 'MISSING'} to=${to ? `${game.artifactIso3}(${to.name})` : 'MISSING'}`);
-
-      if (entry?.distcap != null) {
-        distKm = entry.distcap;
-        if (from && to) bear = bearing(from.lat, from.lng, to.lat, to.lng);
-        console.log(`[geo] distMatrix used → distKm=${distKm} bear=${bear}`);
-      } else if (from && to) {
-        distKm = distanceKm(from.lat, from.lng, to.lat, to.lng);
-        bear   = bearing(from.lat, from.lng, to.lat, to.lng);
-        console.log(`[geo] fallback calc used → distKm=${distKm} bear=${bear}`);
-      } else {
-        console.warn(`[geo] WARN: both lookups failed for ${key} → distKm=0 bear=0 (will be cached!)`);
-      }
-
-      pairCache.set(key, { distKm, bear });
-    }
+    const geo = await getGeoForPair(guessedIso3, game.artifactIso3);
+    distKm = geo.distKm;
+    bear   = geo.bear;
   }
 
   // ── Year hint (pure computation) ──────────────────────────────────────────
@@ -148,16 +112,18 @@ export async function POST(req: NextRequest, { params }: Params) {
     correct:     won,
   };
 
-  // ── Update in-memory state ────────────────────────────────────────────────
+  // ── Update and persist game state ─────────────────────────────────────────
   game.guesses.push(record);
   game.status = won
     ? 'won'
     : game.guesses.length >= MAX_GUESSES
     ? 'lost'
     : 'active';
-  game.guessesLeft = game.status === 'lost' || game.status === 'forfeited'
-    ? 0
-    : MAX_GUESSES - game.guesses.length;
+  game.guessesLeft = game.status === 'active'
+    ? MAX_GUESSES - game.guesses.length
+    : 0;
+
+  await setGame(game);
 
   // ── Audit log (fire-and-forget) ───────────────────────────────────────────
   db.game_status.create({
@@ -197,4 +163,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     year: { hint },
     ...(reveal && { artifact: reveal }),
   });
+  } catch (err) {
+    console.error('[game/guess] Unhandled error:', err);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
 }
+

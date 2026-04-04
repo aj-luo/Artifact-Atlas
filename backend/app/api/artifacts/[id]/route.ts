@@ -31,8 +31,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  return NextResponse.json({
-    ...artifact,
-    Object_ID: artifact.Object_ID.toString(),
-  });
+  return NextResponse.json(
+    { ...artifact, Object_ID: artifact.Object_ID.toString() },
+    { headers: { 'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800' } },
+  );
 }

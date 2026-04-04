@@ -1,3 +1,4 @@
+import { unstable_cache } from 'next/cache';
 import { db } from './db';
 import { metCountryToIso3 } from './metCountryMap';
 
@@ -19,36 +20,33 @@ export type Distribution = {
   byPeriod: Record<TimePeriod, CountryEntry[]>;
 };
 
-// Survives Next.js hot-reloads in dev via globalThis
-const g = globalThis as unknown as { _artifactDist?: Distribution };
 const bannedIso3 = new Set(['BRN', 'GUY', 'VCT', 'VAT']);
-/**
- * Returns (and lazily builds) a cached distribution of eligible artifacts
- * bucketed by time period and country.
- *
- * Only countries with a valid ISO-3 mapping are included, so the caller
- * never needs to retry because of an unmappable country name.
- */
-export async function getDistribution(): Promise<Distribution> {
-  if (g._artifactDist) return g._artifactDist;
 
-  const periods: PeriodEntry[]                        = [];
+async function buildDistribution(): Promise<Distribution> {
+  // Run all 4 period groupBy queries in parallel instead of sequentially
+  const results = await Promise.all(
+    (Object.entries(PERIOD_RANGES) as [TimePeriod, { gte?: bigint; lt?: bigint }][]).map(
+      ([period, range]) =>
+        db.metObjects
+          .groupBy({
+            by: ['Modern_Country'],
+            where: {
+              Primary_Image_URL: { not: null },
+              Modern_Country:    { not: null },
+              Object_Begin_Date: { not: null, ...range },
+            },
+            _count: { Object_ID: true },
+          })
+          .then(rows => ({ period, rows })),
+    ),
+  );
+
+  const periods: PeriodEntry[]                   = [];
   const byPeriod = {} as Record<TimePeriod, CountryEntry[]>;
 
-
-  for (const [period, range] of Object.entries(PERIOD_RANGES) as [TimePeriod, { gte?: bigint; lt?: bigint }][]) {
-    const rows = await db.metObjects.groupBy({
-      by: ['Modern_Country'],
-      where: {
-        Primary_Image_URL: { not: null },
-        Modern_Country:    { not: null },
-        Object_Begin_Date: { not: null, ...range },
-      },
-      _count: { Object_ID: true },
-    });
-
+  for (const { period, rows } of results) {
     type Row = (typeof rows)[number];
-    
+
     const countries: CountryEntry[] = rows
       .filter((r: Row) => {
         if (!r.Modern_Country) return false;
@@ -64,10 +62,21 @@ export async function getDistribution(): Promise<Distribution> {
     }
   }
 
-  const dist: Distribution = { periods, byPeriod };
-  g._artifactDist = dist;
-  return dist;
+  return { periods, byPeriod };
 }
+
+/**
+ * Returns (and lazily builds) a cached distribution of eligible artifacts
+ * bucketed by time period and country.
+ *
+ * Backed by Next.js Data Cache (disk-persisted in production). The 4 DB
+ * groupBy queries run in parallel on cache miss. Revalidates every 24h.
+ */
+export const getDistribution = unstable_cache(
+  buildDistribution,
+  ['artifact-distribution'],
+  { revalidate: 86400, tags: ['artifact-distribution'] },
+);
 
 /** Picks a random item weighted by each entry's `count`. */
 export function weightedRandom<T extends { count: number }>(items: T[]): T {

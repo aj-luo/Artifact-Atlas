@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { metCountryToIso3 } from '@/lib/metCountryMap';
-import { gameStore, MAX_GUESSES } from '@/lib/gameStore';
+import { setGame, MAX_GUESSES } from '@/lib/gameStore';
 import { getDistribution, weightedRandom, PERIOD_RANGES } from '@/lib/distributionCache';
 
 /**
@@ -12,8 +12,8 @@ import { getDistribution, weightedRandom, PERIOD_RANGES } from '@/lib/distributi
  *   2. Randomly select a country within that period, again proportional to count.
  *   3. Fetch one artifact matching that period + country at a random offset.
  *
- * Country/period distributions are computed once and cached for the process
- * lifetime, so this route only ever issues a single DB query per request.
+ * Country/period distributions are cached via Next.js Data Cache, so this
+ * route only ever issues a single DB query per request on warm cache.
  *
  * Response: { gameId, imageUrl }
  */
@@ -66,28 +66,32 @@ export async function POST() {
     if (!artifact) continue;
 
     const artifactIso3 = metCountryToIso3(artifact.Modern_Country!);
-    if (!artifactIso3) continue; // distribution filters these out, but guard remains
+    if (!artifactIso3) continue;
 
     const gameId    = crypto.randomUUID();
     const beginYear = Number(artifact.Object_Begin_Date);
-    // Use != null so that Object_End_Date = 0n (year 0 / 1 AD) is not treated as missing
     const endYear   = artifact.Object_End_Date != null
       ? Math.max(Number(artifact.Object_End_Date), beginYear)
       : beginYear;
 
-    gameStore.set(gameId, {
-      gameId,
-      objectId:          artifact.Object_ID,
-      artifactIso3,
-      artifactBeginYear: beginYear,
-      artifactEndYear:   endYear,
-      imageUrl:          artifact.Primary_Image_URL!,
-      title:             artifact.Title ?? null,
-      linkResource:      artifact.Link_Resource ?? null,
-      guesses:           [],
-      status:            'active',
-      guessesLeft:       MAX_GUESSES,
-    });
+    try {
+      await setGame({
+        gameId,
+        objectId:          artifact.Object_ID,
+        artifactIso3,
+        artifactBeginYear: beginYear,
+        artifactEndYear:   endYear,
+        imageUrl:          artifact.Primary_Image_URL!,
+        title:             artifact.Title ?? null,
+        linkResource:      artifact.Link_Resource ?? null,
+        guesses:           [],
+        status:            'active',
+        guessesLeft:       MAX_GUESSES,
+      });
+    } catch (err) {
+      console.error('[game/new] Failed to persist game state:', err);
+      return NextResponse.json({ error: 'Failed to create game' }, { status: 503 });
+    }
 
     return NextResponse.json(
       { gameId, imageUrl: artifact.Primary_Image_URL },

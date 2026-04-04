@@ -52,6 +52,9 @@ model MetObjects {
   Assignment_Method       String?       @map("Assignment Method")
   game_status             game_status[]
   reported_inaccurate     reported_inaccurate[]
+
+  @@index([Modern_Country, Object_Begin_Date])
+  @@index([Primary_Image_URL])
 }
 
 /// The underlying table does not contain a valid unique identifier and can therefore currently not be handled by Prisma Client.
@@ -119,6 +122,24 @@ model game_status {
   time_distance    BigInt?
   is_correct       Boolean?
   MetObjects       MetObjects @relation(fields: [object_uuid], references: [Object_ID], onDelete: NoAction, onUpdate: NoAction, map: "game_results_object_uuid_fkey")
+}
+
+model active_games {
+  game_id             String   @id @db.Uuid
+  object_id           BigInt
+  artifact_iso3       String   @db.VarChar(3)
+  artifact_begin_year Int
+  artifact_end_year   Int
+  image_url           String
+  title               String?
+  link_resource       String?
+  guesses             Json     @default("[]")
+  status              String   @default("active") @db.VarChar(16)
+  guesses_left        Int
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([updated_at])
 }
 
 /// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
