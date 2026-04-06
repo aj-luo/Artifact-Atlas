@@ -23,17 +23,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  webpack(config) {
-    // Exclude swagger-ui-react (~1.5MB) from the production bundle.
-    // The /docs page still works in development.
-    if (process.env.NODE_ENV === 'production') {
-      config.resolve.alias['swagger-ui-react'] = path.resolve(
-        root,
-        'lib/stubs/swaggerStub.ts',
-      );
-    }
-    return config;
-  },
 };
 
 export default nextConfig;
