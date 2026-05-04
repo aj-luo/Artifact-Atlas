@@ -31,13 +31,13 @@ function List() {
     return (
         <>
         <ul className={styles.list}>
-          <li><Link href="/aa/tos" target='_blank' rel='noreferrer'>T.O.S.</Link></li>
+          <li><Link href="/tos" target='_blank' rel='noreferrer'>T.O.S.</Link></li>
             <li>|</li>
-          <li><Link href="/aa/privacy" target='_blank' rel='noreferrer'>PRIVACY</Link></li>
+          <li><Link href="/privacy" target='_blank' rel='noreferrer'>PRIVACY</Link></li>
             <li>|</li>
-          <li><Link href="/aa/assets" target='_blank' rel='noreferrer'>ASSETS</Link></li>
+          <li><Link href="/assets" target='_blank' rel='noreferrer'>ASSETS</Link></li>
             <li>|</li>
-          <li><Link href="/aa/instructions" target='_blank' rel='noreferrer'>INSTRUCTIONS</Link></li>
+          <li><Link href="/instructions" target='_blank' rel='noreferrer'>INSTRUCTIONS</Link></li>
             <li>|</li>
             <li onClick={toggleModal} style={{cursor: 'pointer'}}>CONTACT</li>
         </ul>

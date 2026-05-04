@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import Footer from '../../Footer/Footer.jsx'
-import Gamescreen from '../../Gamescreen/Gamescreen.jsx'
-import Homepage from '../../Homepage/Homepage.jsx'
-import logo from '../../assets/AA_logo.png'
-import halfdome from '../../assets/half-dome-logo.png'
-import AdBanner from '../../Adsense/AdBanner.jsx'
+import Footer from '../Footer/Footer.jsx'
+import Gamescreen from '../Gamescreen/Gamescreen.jsx'
+import Homepage from '../Homepage/Homepage.jsx'
+import logo from '../assets/AA_logo.png'
+import halfdome from '../assets/half-dome-logo.png'
+import AdBanner from '../Adsense/AdBanner.jsx'
 
 export default function Home() {
   const [started, setStarted] = useState(false);
@@ -39,18 +39,17 @@ export default function Home() {
       
       <div className='item2'>
         <div className='column1'>
-          <AdBanner dataAdSlot="8887177320" dataAdFormat="auto" dataFullWidthResponsive="true" />
         </div>
         <div className='column2'>
-          {started 
-          ? <Gamescreen /> 
-          : <Homepage onStart={handleStart} isLoading={isLoading} />
-        }
+          {started
+            ? <Gamescreen />
+            : <Homepage onStart={handleStart} isLoading={isLoading} />
+          }
         </div>
         <div className='column3'>
-          <AdBanner dataAdSlot="2573050418" dataAdFormat="auto" dataFullWidthResponsive="true" />
         </div>
       </div>
+
       <div className='item3'>
         <Footer />
       </div>
