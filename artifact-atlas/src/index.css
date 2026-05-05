@@ -40,11 +40,21 @@ body {
 
 .item2 {
   grid-row: 2/3;
+  display: grid;
+  grid-template-columns: minmax(160px, 0.5fr) 1fr minmax(160px, 0.5fr);
+  align-items: center;
+  gap: 16px;
+}
+
+.column1,
+.column3 {
   display: flex;
   justify-content: center;
-  align-items: center;
-  display: grid;
-  grid-template-columns: 0.5fr 1fr 0.5fr;
+}
+
+.column2 {
+  display: flex;
+  justify-content: center;
 }
 
 .item3 {
@@ -80,4 +90,15 @@ body {
   width: auto;
   display: block;
   margin-left: -8px;
+}
+
+@media (max-width: 1100px) {
+  .item2 {
+    grid-template-columns: 1fr;
+  }
+
+  .column1,
+  .column3 {
+    display: none;
+  }
 }
