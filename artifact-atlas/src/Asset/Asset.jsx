@@ -22,5 +22,4 @@ function Asset() {
     );
 };
 
-
 export default Asset;
