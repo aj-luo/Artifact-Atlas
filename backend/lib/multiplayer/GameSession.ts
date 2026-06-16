@@ -237,6 +237,13 @@ export class GameSession {
 
     if (!timerExpired && !allGuessed) return false;
 
+    // Speculatively fetch next artifact OUTSIDE the transaction to prevent 5000ms timeout (P2028)
+    const isGameOverSpeculative = activePlayers.length <= 1 || this.game.current_round >= this.game.max_rounds;
+    let preFetchedArtifact = null;
+    if (!isGameOverSpeculative) {
+      preFetchedArtifact = await pickRandomArtifact();
+    }
+
     // Use a transaction with an optimistic lock: re-fetch inside to ensure we
     // only resolve once even if two requests race here simultaneously.
     const resolved = await db.$transaction(async (tx) => {
@@ -336,7 +343,7 @@ export class GameSession {
           data:  { status: 'finished', last_round_reveal: lastRoundReveal as object },
         });
       } else {
-        const nextArtifact = await pickRandomArtifact();
+        const nextArtifact = preFetchedArtifact || await pickRandomArtifact();
         if (!nextArtifact) throw new Error('Could not find next artifact');
 
         await tx.multiplayer_games.update({

@@ -10,6 +10,7 @@ export default function BattleRoyaleLobby() {
   const [countdownSeconds, setCountdownSeconds] = useState(20);
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+  const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState(null);
 
   const handleCreateGame = async () => {
@@ -31,10 +32,34 @@ export default function BattleRoyaleLobby() {
     }
   };
 
-  const handleJoinGame = (e) => {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+  const showToast = (msg) => {
+    setError(msg);
+    setTimeout(() => setError(null), 3000);
+  };
+
+  const handleJoinGame = async (e) => {
     e.preventDefault();
-    if (!joinGameId.trim()) return;
-    router.push(`/battle-royale/${joinGameId.trim()}`);
+    const raw = joinGameId.trim();
+    if (!raw) return;
+    if (!uuidRegex.test(raw)) {
+      showToast('Invalid Game ID');
+      return;
+    }
+    setIsChecking(true);
+    try {
+      const res = await fetch(`/api/multiplayer/${raw}/exists`);
+      if (!res.ok) {
+        showToast('Invalid Game ID');
+        return;
+      }
+      router.push(`/battle-royale/${raw}`);
+    } catch {
+      showToast('Invalid Game ID');
+    } finally {
+      setIsChecking(false);
+    }
   };
 
   return (
@@ -88,8 +113,8 @@ export default function BattleRoyaleLobby() {
               onChange={(e) => setJoinGameId(e.target.value)}
               className="br-input"
             />
-            <button type="submit" className="br-btn br-btn-secondary" disabled={!joinGameId.trim()}>
-              JOIN GAME
+            <button type="submit" className="br-btn br-btn-secondary" disabled={!joinGameId.trim() || isChecking}>
+              {isChecking ? 'CHECKING...' : 'JOIN GAME'}
             </button>
           </form>
         </div>

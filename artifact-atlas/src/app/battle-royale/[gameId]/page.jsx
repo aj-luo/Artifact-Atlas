@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import ReactFlagsSelect from "react-flags-select";
@@ -40,28 +40,27 @@ export default function BattleRoyaleRoom() {
     if (saved) setPlayerId(saved);
   }, [gameId]);
 
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/multiplayer/${gameId}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        setGameState(data);
+        if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNum) {
+          setLastRoundNum(data.lastRoundReveal.round);
+          setShowReveal(true);
+          setTimeout(() => setShowReveal(false), 5000);
+        }
+      }
+    } catch (err) {
+      console.error("Status fetch error", err);
+    }
+  }, [gameId, lastRoundNum]);
+
   // Real-time Supabase Subscription
   useEffect(() => {
-    const fetchStatus = async () => {
-      try {
-        const res = await fetch(`/api/multiplayer/${gameId}/status`);
-        if (res.ok) {
-          const data = await res.json();
-          setGameState(data);
-          
-          if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNum) {
-            setLastRoundNum(data.lastRoundReveal.round);
-            setShowReveal(true);
-            setTimeout(() => setShowReveal(false), 5000); // show reveal for 5s
-          }
-        }
-      } catch (err) {
-        console.error("Status fetch error", err);
-      }
-    };
-    
     fetchStatus(); // initial fetch
-    
+
     const channel = supabase
       .channel(`game-${gameId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games', filter: `id=eq.${gameId}` }, fetchStatus)
@@ -72,7 +71,7 @@ export default function BattleRoyaleRoom() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [gameId, lastRoundNum]);
+  }, [gameId, fetchStatus]);
 
   // Countdown loop
   useEffect(() => {
@@ -105,6 +104,7 @@ export default function BattleRoyaleRoom() {
         const data = await res.json();
         setPlayerId(data.playerId);
         localStorage.setItem(`br_player_${gameId}`, data.playerId);
+        await fetchStatus();
       }
     } catch (err) {
       console.error(err);
