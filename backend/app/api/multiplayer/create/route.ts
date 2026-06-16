@@ -9,9 +9,16 @@ import { db } from '@/lib/db';
  *
  * Response: { gameId: string }
  */
-export async function POST() {
+export async function POST(req: Request) {
   try {
-    const game = await db.multiplayer_games.create({ data: {} });
+    const body = await req.json().catch(() => ({}));
+    const countdownSeconds = typeof body.countdownSeconds === 'number' ? body.countdownSeconds : 20;
+
+    const game = await db.multiplayer_games.create({ 
+      data: {
+        countdown_seconds: countdownSeconds
+      } 
+    });
     return NextResponse.json({ gameId: game.id }, { status: 201 });
   } catch (err) {
     console.error('[multiplayer/create] DB error:', err);

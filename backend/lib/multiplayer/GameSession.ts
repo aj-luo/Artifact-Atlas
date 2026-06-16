@@ -37,6 +37,8 @@ export interface GameStatusResponse {
   status:          'waiting' | 'active' | 'finished';
   currentRound:    number;
   maxRounds:       number;
+  countdownSeconds: number;
+  hostId:          string | null;
   currentArtifact: { imageUrl: string } | null;
   roundEndsAt:     string | null;
   players:         PlayerStatus[];
@@ -177,12 +179,12 @@ export class GameSession {
       throw new GameSessionError('Game artifact is not set', 500);
     }
 
-    // Start the 20s timer on the first guess of the round
+    // Start the countdown timer on the first guess of the round
     const isFirstGuess = this.roundGuesses.length === 0 && this.game.round_ends_at === null;
     if (isFirstGuess) {
       this.game = await db.multiplayer_games.update({
         where: { id: this.game.id },
-        data:  { round_ends_at: new Date(Date.now() + 20_000) },
+        data:  { round_ends_at: new Date(Date.now() + this.game.countdown_seconds * 1000) },
       });
     }
 
@@ -377,12 +379,16 @@ export class GameSession {
    */
   getStatus(): GameStatusResponse {
     const guessedPlayerIds = new Set(this.roundGuesses.map(g => g.player_id));
+    const sortedPlayers = [...this.players].sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+    const hostId = sortedPlayers.length > 0 ? sortedPlayers[0].id : null;
 
     return {
       gameId:       this.game.id,
       status:       this.game.status as 'waiting' | 'active' | 'finished',
       currentRound: this.game.current_round,
       maxRounds:    this.game.max_rounds,
+      countdownSeconds: this.game.countdown_seconds,
+      hostId:       hostId,
       currentArtifact: this.game.artifact_image_url
         ? { imageUrl: this.game.artifact_image_url }
         : null,
