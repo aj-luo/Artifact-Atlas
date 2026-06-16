@@ -8,6 +8,8 @@ import logo from '../../assets/AA_logo.png';
 export default function BattleRoyaleLobby() {
   const router = useRouter();
   const [countdownSeconds, setCountdownSeconds] = useState(20);
+  const [maxRounds, setMaxRounds] = useState(10);
+  const [maxHealth, setMaxHealth] = useState(10000);
   const [joinGameId, setJoinGameId] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
@@ -20,7 +22,7 @@ export default function BattleRoyaleLobby() {
       const res = await fetch('/api/multiplayer/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ countdownSeconds }),
+        body: JSON.stringify({ countdownSeconds, maxRounds, maxHealth }),
       });
       if (!res.ok) throw new Error('Failed to create game');
       const data = await res.json();
@@ -77,16 +79,20 @@ export default function BattleRoyaleLobby() {
           <p>Host a new game and invite your friends.</p>
           
           <div className="br-input-group">
+            <label>Rounds: <span>{maxRounds}</span></label>
+            <input type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
+            <small>Number of artifacts to guess (5–20).</small>
+          </div>
+
+          <div className="br-input-group">
+            <label>Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
+            <input type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
+            <small>Each player's starting health (5,000–20,000).</small>
+          </div>
+
+          <div className="br-input-group">
             <label>Countdown Timer: <span>{countdownSeconds}s</span></label>
-            <input 
-              type="range" 
-              min="5" 
-              max="60" 
-              step="5"
-              value={countdownSeconds} 
-              onChange={(e) => setCountdownSeconds(Number(e.target.value))} 
-              className="br-slider"
-            />
+            <input type="range" min="5" max="60" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
             <small>Time allowed after the first guess is made.</small>
           </div>
           

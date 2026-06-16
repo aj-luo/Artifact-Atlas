@@ -165,6 +165,7 @@ model multiplayer_games {
   current_round       Int       @default(0)
   max_rounds          Int       @default(10)
   countdown_seconds   Int       @default(20)
+  max_health          Int       @default(25000)
   // Current round artifact — populated on start() and each round advance
   object_id           BigInt?
   artifact_iso3       String?   @db.VarChar(3)

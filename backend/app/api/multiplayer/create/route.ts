@@ -13,11 +13,11 @@ export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
     const countdownSeconds = typeof body.countdownSeconds === 'number' ? body.countdownSeconds : 20;
+    const maxRounds        = typeof body.maxRounds        === 'number' ? Math.min(Math.max(body.maxRounds, 5), 20)        : 10;
+    const maxHealth        = typeof body.maxHealth        === 'number' ? Math.min(Math.max(body.maxHealth, 5000), 20000)  : 25000;
 
-    const game = await db.multiplayer_games.create({ 
-      data: {
-        countdown_seconds: countdownSeconds
-      } 
+    const game = await db.multiplayer_games.create({
+      data: { countdown_seconds: countdownSeconds, max_rounds: maxRounds, max_health: maxHealth },
     });
     return NextResponse.json({ gameId: game.id }, { status: 201 });
   } catch (err) {

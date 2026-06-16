@@ -33,16 +33,17 @@ export interface LastRoundReveal {
 }
 
 export interface GameStatusResponse {
-  gameId:          string;
-  status:          'waiting' | 'active' | 'finished';
-  currentRound:    number;
-  maxRounds:       number;
+  gameId:           string;
+  status:           'waiting' | 'active' | 'finished';
+  currentRound:     number;
+  maxRounds:        number;
+  maxHealth:        number;
   countdownSeconds: number;
-  hostId:          string | null;
-  currentArtifact: { imageUrl: string } | null;
-  roundEndsAt:     string | null;
-  players:         PlayerStatus[];
-  lastRoundReveal: LastRoundReveal | null;
+  hostId:           string | null;
+  currentArtifact:  { imageUrl: string } | null;
+  roundEndsAt:      string | null;
+  players:          PlayerStatus[];
+  lastRoundReveal:  LastRoundReveal | null;
 }
 
 export interface GuessResult {
@@ -108,7 +109,7 @@ export class GameSession {
     }
 
     const player = await db.multiplayer_players.create({
-      data: { game_id: this.game.id, name: trimmed },
+      data: { game_id: this.game.id, name: trimmed, health: this.game.max_health },
     });
 
     this.players.push(player);
@@ -390,10 +391,11 @@ export class GameSession {
     const hostId = sortedPlayers.length > 0 ? sortedPlayers[0].id : null;
 
     return {
-      gameId:       this.game.id,
-      status:       this.game.status as 'waiting' | 'active' | 'finished',
-      currentRound: this.game.current_round,
-      maxRounds:    this.game.max_rounds,
+      gameId:           this.game.id,
+      status:           this.game.status as 'waiting' | 'active' | 'finished',
+      currentRound:     this.game.current_round,
+      maxRounds:        this.game.max_rounds,
+      maxHealth:        this.game.max_health,
       countdownSeconds: this.game.countdown_seconds,
       hostId:       hostId,
       currentArtifact: this.game.artifact_image_url
