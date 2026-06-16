@@ -57,7 +57,7 @@ export default function BattleRoyaleRoom() {
     }
   }, [gameId, lastRoundNum]);
 
-  // Real-time Supabase Subscription
+  // Real-time Supabase Subscription & Fallback Polling
   useEffect(() => {
     fetchStatus(); // initial fetch
 
@@ -67,9 +67,13 @@ export default function BattleRoyaleRoom() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_guesses', filter: `game_id=eq.${gameId}` }, fetchStatus)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_players', filter: `game_id=eq.${gameId}` }, fetchStatus)
       .subscribe();
+      
+    // Fallback polling every 2 seconds in case Realtime isn't configured in the DB
+    const pollInterval = setInterval(fetchStatus, 2000);
 
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, [gameId, fetchStatus]);
 

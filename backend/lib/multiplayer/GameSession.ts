@@ -343,7 +343,7 @@ export class GameSession {
           data:  { status: 'finished', last_round_reveal: lastRoundReveal as object },
         });
       } else {
-        const nextArtifact = preFetchedArtifact || await pickRandomArtifact();
+        const nextArtifact = preFetchedArtifact;
         if (!nextArtifact) throw new Error('Could not find next artifact');
 
         await tx.multiplayer_games.update({
