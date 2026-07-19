@@ -39,6 +39,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const { score, roundResolved } = await session.submitGuess(playerId, country, Number(year));
+    void session.broadcastState();
 
     return NextResponse.json({
       score,

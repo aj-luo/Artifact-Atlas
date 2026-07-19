@@ -46,6 +46,8 @@ export default function BattleRoyaleRoom() {
   const [showReveal, setShowReveal] = useState(false);
   // Ref instead of state so fetchStatus doesn't need it as a dep
   const lastRoundNumRef = useRef(0);
+  const debounceRef = useRef(null);
+  const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -71,26 +73,48 @@ export default function BattleRoyaleRoom() {
     }
   }, [gameId]);
 
-  // Supabase realtime + 2s fallback poll; channel created once per gameId
+  // Batches rapid-fire postgres_changes events (e.g. N player rows + game row on round resolution)
+  // into a single fetchStatus call instead of N+1 parallel HTTP requests.
+  const debouncedFetchStatus = useCallback(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(fetchStatus, 50);
+  }, [fetchStatus]);
+
+  // Supabase realtime channel — broadcast (fast path) + postgres_changes (fallback)
   useEffect(() => {
     void fetchStatus();
 
     const channel = supabase
       .channel(`game-${gameId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games',   filter: `id=eq.${gameId}` },      fetchStatus)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_guesses', filter: `game_id=eq.${gameId}` }, fetchStatus)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_players', filter: `game_id=eq.${gameId}` }, fetchStatus)
-      .subscribe();
-
-    const poll = setInterval(fetchStatus, 2000);
+      // Broadcast: full game state delivered by the server directly after each mutation,
+      // no HTTP round-trip needed on the client side.
+      .on('broadcast', { event: 'game_update' }, ({ payload }) => {
+        setGameState(payload);
+        if (payload.lastRoundReveal && payload.lastRoundReveal.round > lastRoundNumRef.current) {
+          lastRoundNumRef.current = payload.lastRoundReveal.round;
+          setShowReveal(true);
+          setTimeout(() => setShowReveal(false), 5000);
+        }
+      })
+      // postgres_changes: safety fallback for any broadcast misses
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games',   filter: `id=eq.${gameId}` },      debouncedFetchStatus)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_guesses', filter: `game_id=eq.${gameId}` }, debouncedFetchStatus)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_players', filter: `game_id=eq.${gameId}` }, debouncedFetchStatus)
+      .subscribe((status) => setChannelStatus(status));
 
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(poll);
+      clearTimeout(debounceRef.current);
     };
-  }, [gameId, fetchStatus]);
+  }, [gameId, fetchStatus, debouncedFetchStatus]);
 
-  // Countdown timer
+  // Adaptive polling: 10s when realtime is healthy, 2s when degraded
+  useEffect(() => {
+    const interval = setInterval(fetchStatus, channelStatus === 'SUBSCRIBED' ? 10000 : 2000);
+    return () => clearInterval(interval);
+  }, [channelStatus, fetchStatus]);
+
+  // Countdown timer — triggers server-side round resolution the moment the clock hits 0
   useEffect(() => {
     if (!gameState?.roundEndsAt || gameState.status !== 'active') {
       setTimeRemaining(null);
@@ -99,10 +123,15 @@ export default function BattleRoyaleRoom() {
     const interval = setInterval(() => {
       const diff = Math.max(0, Math.floor((new Date(gameState.roundEndsAt).getTime() - Date.now()) / 1000));
       setTimeRemaining(diff);
-      if (diff === 0) clearInterval(interval);
+      if (diff === 0) {
+        clearInterval(interval);
+        // Poke the backend immediately so resolveRoundIfNeeded() runs within ~200ms
+        // of actual expiry rather than waiting for the next poll cycle (up to 2s).
+        void fetchStatus();
+      }
     }, 200);
     return () => clearInterval(interval);
-  }, [gameState?.roundEndsAt, gameState?.status]);
+  }, [gameState?.roundEndsAt, gameState?.status, fetchStatus]);
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -161,11 +190,22 @@ export default function BattleRoyaleRoom() {
     if (!alpha3) return;
     setIsSubmitting(true);
     try {
-      await fetch(`/api/multiplayer/${gameId}/guess`, {
+      const res = await fetch(`/api/multiplayer/${gameId}/guess`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ playerId, country: alpha3, year: selectedYear }),
       });
+      // Apply the full game state from the response immediately (score + post-resolution state)
+      // so the UI updates within network RTT rather than waiting for the next poll.
+      if (res.ok) {
+        const data = await res.json();
+        setGameState(data);
+        if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNumRef.current) {
+          lastRoundNumRef.current = data.lastRoundReveal.round;
+          setShowReveal(true);
+          setTimeout(() => setShowReveal(false), 5000);
+        }
+      }
     } catch (err) {
       console.error(err);
     }

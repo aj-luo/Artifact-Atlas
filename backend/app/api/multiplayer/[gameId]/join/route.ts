@@ -29,6 +29,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const { playerId } = await session.join(name);
+    void session.broadcastState();
     return NextResponse.json({ playerId }, { status: 201 });
   } catch (err) {
     if (err instanceof GameSessionError) {

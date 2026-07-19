@@ -21,6 +21,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
     }
 
     await session.start();
+    void session.broadcastState();
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof GameSessionError) {

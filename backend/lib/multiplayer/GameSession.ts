@@ -379,7 +379,7 @@ export class GameSession {
     return resolved;
   }
 
-  // ── Read ─────────────────────────────────────────────────────────────────────
+  // ── Read / Broadcast ─────────────────────────────────────────────────────────
 
   /**
    * Serialize current in-memory state to the API response shape.
@@ -411,5 +411,38 @@ export class GameSession {
       })),
       lastRoundReveal: (this.game.last_round_reveal as LastRoundReveal | null) ?? null,
     };
+  }
+
+  /**
+   * Push the current game state to all subscribed clients via Supabase Realtime
+   * Broadcast. Uses the REST endpoint — no persistent WS connection from the server,
+   * which is safer for serverless environments.
+   *
+   * Non-fatal: a broadcast failure does not fail the HTTP response; clients will
+   * still receive state via the postgres_changes fallback and polling.
+   */
+  async broadcastState(): Promise<void> {
+    try {
+      const projectRef = process.env.NEXT_PUBLIC_SUPABASE_URL!
+        .replace('https://', '')
+        .split('.')[0];
+      await fetch(`https://${projectRef}.supabase.co/realtime/v1/api/broadcast`, {
+        method: 'POST',
+        headers: {
+          'Content-Type':  'application/json',
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'apikey':        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        },
+        body: JSON.stringify({
+          messages: [{
+            topic:   `realtime:game-${this.game.id}`,
+            event:   'game_update',
+            payload: this.getStatus(),
+          }],
+        }),
+      });
+    } catch (err) {
+      console.error('[GameSession.broadcastState] failed:', err);
+    }
   }
 }
