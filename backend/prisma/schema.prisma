@@ -156,3 +156,62 @@ model iso_code_mapping {
   sub_region_code          BigInt? @map("sub-region-code")
   intermediate_region_code String? @map("intermediate-region-code")
 }
+
+// ── Multiplayer ────────────────────────────────────────────────────────────────
+
+model multiplayer_games {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status              String    @default("waiting") @db.VarChar(16) // waiting | active | finished
+  current_round       Int       @default(0)
+  max_rounds          Int       @default(10)
+  countdown_seconds   Int       @default(20)
+  max_health          Int       @default(25000)
+  // Current round artifact — populated on start() and each round advance
+  object_id           BigInt?
+  artifact_iso3       String?   @db.VarChar(3)
+  artifact_begin_year Int?
+  artifact_end_year   Int?
+  artifact_image_url  String?
+  artifact_title      String?
+  // Set to now()+20s on the first guess of a round; null at round start
+  round_ends_at       DateTime? @db.Timestamptz(6)
+  // JSON blob of previous round's reveal (country, year, scores) for UI display
+  last_round_reveal   Json?
+  created_at          DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at          DateTime  @updatedAt @db.Timestamptz(6)
+
+  players multiplayer_players[]
+  guesses multiplayer_guesses[]
+}
+
+model multiplayer_players {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  game_id       String   @db.Uuid
+  name          String   @db.VarChar(32)
+  health        Int      @default(25000)
+  is_eliminated Boolean  @default(false)
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  game    multiplayer_games    @relation(fields: [game_id], references: [id])
+  guesses multiplayer_guesses[]
+}
+
+model multiplayer_guesses {
+  id              BigInt   @id @default(autoincrement())
+  game_id         String   @db.Uuid
+  player_id       String   @db.Uuid
+  round_number    Int
+  country_guessed String?  @db.VarChar(3) // null = timer expired, no guess submitted
+  year_guessed    Int?
+  distance_km     Float?
+  years_away      Int?
+  score_country   Int      @default(0)
+  score_year      Int      @default(0)
+  total_score     Int      @default(0)
+  submitted_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  game   multiplayer_games   @relation(fields: [game_id], references: [id])
+  player multiplayer_players @relation(fields: [player_id], references: [id])
+
+  @@unique([game_id, player_id, round_number])
+}
