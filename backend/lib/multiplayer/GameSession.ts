@@ -21,6 +21,8 @@ export interface RoundGuessResult {
   distanceKm: number | null;
   yearsAway: number | null;
   totalScore: number;
+  hpLost: number;
+  isEliminated: boolean;
 }
 
 export interface LastRoundReveal {
@@ -47,6 +49,7 @@ export interface GameStatusResponse {
   roundEndsAt: string | null;
   players: PlayerStatus[];
   lastRoundReveal: LastRoundReveal | null;
+  roundHistory: LastRoundReveal[];
 }
 
 export interface GuessResult {
@@ -288,6 +291,7 @@ export class GameSession {
     if (!definitelyGameOver && !nextArtifact) return false;
 
     const maxScore = guesses.length ? Math.max(...guesses.map((guess) => guess.total_score)) : 0;
+    const healthBeforeRound = Object.fromEntries(players.map((player) => [player.id, player.health]));
     for (const player of activePlayers) {
       const guess = guesses.find((item) => item.player_id === player.id);
       const newHealth = Math.max(0, player.health - (maxScore - (guess?.total_score ?? 0)));
@@ -309,28 +313,40 @@ export class GameSession {
     const revealGuesses = await tx.multiplayer_guesses.findMany({
       where: { game_id: game.id, round_number: game.current_round },
     });
-    const playerNames = Object.fromEntries(updatedPlayers.map((player) => [player.id, player.name]));
+    const playersById = Object.fromEntries(updatedPlayers.map((player) => [player.id, player]));
     const reveal: LastRoundReveal = {
       round: game.current_round,
       artifactIso3: game.artifact_iso3!,
       artifactBeginYear: game.artifact_begin_year!,
       artifactEndYear: game.artifact_end_year!,
       artifactTitle: game.artifact_title ?? null,
-      guesses: revealGuesses.map((guess) => ({
-        playerId: guess.player_id, playerName: playerNames[guess.player_id] ?? 'Unknown',
-        countryGuessed: guess.country_guessed, yearGuessed: guess.year_guessed,
-        distanceKm: guess.distance_km == null ? null : Math.round(guess.distance_km),
-        yearsAway: guess.years_away, totalScore: guess.total_score,
-      })),
+      guesses: updatedPlayers.map((player) => {
+        const guess = revealGuesses.find((item) => item.player_id === player.id);
+        return {
+          playerId: player.id,
+          playerName: player.name,
+          countryGuessed: guess?.country_guessed ?? null,
+          yearGuessed: guess?.year_guessed ?? null,
+          distanceKm: guess?.distance_km == null ? null : Math.round(guess.distance_km),
+          yearsAway: guess?.years_away ?? null,
+          totalScore: guess?.total_score ?? 0,
+          hpLost: Math.max(0, (healthBeforeRound[player.id] ?? player.health) - player.health),
+          isEliminated: playersById[player.id]?.is_eliminated ?? false,
+        };
+      }),
     };
     const remaining = updatedPlayers.filter((player) => !player.is_eliminated);
     const gameOver = remaining.length <= 1 || game.current_round >= game.max_rounds;
+
+    const existingHistory = Array.isArray(game.round_history) ? game.round_history : [];
+    const roundHistory = [...existingHistory, reveal].slice(-20) as Prisma.InputJsonValue;
 
     if (gameOver) {
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
           status: 'finished', last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
+          round_history: roundHistory,
           round_starts_at: null,
           revision: { increment: 1 },
         },
@@ -346,6 +362,7 @@ export class GameSession {
           round_ends_at: null,
           round_starts_at: new Date(now.getTime() + 20_000),
           last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
+          round_history: roundHistory,
           revision: { increment: 2 },
         },
       });
@@ -356,6 +373,13 @@ export class GameSession {
   getStatus(): GameStatusResponse {
     const guessedIds = new Set(this.roundGuesses.map((guess) => guess.player_id));
     const players = [...this.players].sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
+    const lastRoundReveal = (this.game.last_round_reveal as unknown as LastRoundReveal | null) ?? null;
+    const storedHistory = Array.isArray(this.game.round_history)
+      ? this.game.round_history as unknown as LastRoundReveal[]
+      : [];
+    // Games created before round_history was introduced still expose their
+    // available last result instead of appearing to have no completed rounds.
+    const roundHistory = storedHistory.length > 0 ? storedHistory : (lastRoundReveal ? [lastRoundReveal] : []);
     return {
       gameId: this.game.id,
       revision: this.game.revision,
@@ -374,7 +398,8 @@ export class GameSession {
         isEliminated: player.is_eliminated,
         hasGuessedThisRound: guessedIds.has(player.id),
       })),
-      lastRoundReveal: (this.game.last_round_reveal as unknown as LastRoundReveal | null) ?? null,
+      lastRoundReveal,
+      roundHistory,
     };
   }
 

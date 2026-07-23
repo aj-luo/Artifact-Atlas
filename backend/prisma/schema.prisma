@@ -180,6 +180,8 @@ model multiplayer_games {
   round_starts_at     DateTime? @db.Timestamptz(6)
   // JSON blob of previous round's reveal (country, year, scores) for UI display
   last_round_reveal   Json?
+  // Completed-round snapshots, retained for reconnect-safe multiplayer history
+  round_history       Json?
   created_at          DateTime  @default(now()) @db.Timestamptz(6)
   updated_at          DateTime  @updatedAt @db.Timestamptz(6)
 

@@ -361,6 +361,20 @@
   border-radius: 12px;
 }
 
+.br-history-button {
+  width: auto;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.br-history-button:hover { background: rgba(255, 255, 255, 0.15); }
+
 .br-round-info { font-size: 1.1rem; font-weight: 700; }
 
 .br-guess-count { font-size: 0.9rem; color: #aaa; }
@@ -422,7 +436,6 @@
 }
 
 .br-active-content.is-intermission {
-  pointer-events: none;
   user-select: none;
 }
 
@@ -463,20 +476,27 @@
   object-fit: contain;
 }
 
-/* Reveal overlay */
-.br-reveal-overlay {
-  position: absolute;
-  inset: 0;
+/* Round results */
+.br-round-results {
+  grid-column: 1 / -1;
+  min-height: 480px;
+  max-height: calc(100vh - 170px);
+  overflow-y: auto;
   background: rgba(10, 10, 20, 0.92);
-  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 65, 108, 0.25);
+  border-radius: 16px;
+  display: flex;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.br-result-card {
+  width: min(100%, 820px);
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
-  padding: 1.5rem;
-  overflow-y: auto;
   gap: 1rem;
-  z-index: 10;
 }
 
 .br-reveal-heading {
@@ -548,11 +568,24 @@
   font-size: 0.88rem;
 }
 
+.br-reveal-player.is-you {
+  border-color: rgba(255, 65, 108, 0.65);
+  background: rgba(255, 65, 108, 0.12);
+}
+
 .br-reveal-player-name { font-weight: 700; }
 .br-reveal-player-guess { color: #bbb; font-size: 0.82rem; }
 .br-reveal-player-score { font-weight: 700; color: #fff; }
 .br-reveal-player-dmg { font-size: 0.8rem; color: #ff6b8a; font-weight: 600; }
 .br-reveal-player-dmg.best { color: #4caf50; }
+
+.br-result-out-tag {
+  margin-left: 0.4rem;
+  color: #999;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
 
 /* Controls pane */
 .br-controls-pane {
@@ -743,3 +776,73 @@
 .br-lb-hp   { color: #aaa; font-size: 0.9rem; }
 
 .br-play-again { max-width: 220px; margin-top: 0.5rem; }
+.br-finished-history { margin-top: -0.5rem; }
+
+/* Persistent, read-only round history */
+.br-history-overlay {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.br-history-panel {
+  width: min(920px, 100%);
+  max-height: min(860px, calc(100vh - 2rem));
+  display: flex;
+  flex-direction: column;
+  background: #141421;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 16px;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.6);
+}
+
+.br-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.br-history-header h2 { margin: 0; font-size: 1.25rem; }
+
+.br-history-close {
+  border: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.br-history-list {
+  overflow-y: auto;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.br-history-round-card {
+  width: 100%;
+  padding: 1rem;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.br-history-empty { color: #aaa; text-align: center; margin: 2rem; }
+
+@media (max-width: 650px) {
+  .br-page { padding: 1rem; }
+  .br-top-bar { gap: 0.5rem; flex-wrap: wrap; }
+  .br-reveal-player { grid-template-columns: 1fr auto; gap: 0.35rem 0.75rem; }
+  .br-reveal-player-guess { grid-column: 1 / -1; }
+  .br-round-results { min-height: 400px; padding: 1rem; }
+}

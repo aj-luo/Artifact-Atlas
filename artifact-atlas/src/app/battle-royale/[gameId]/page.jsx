@@ -28,6 +28,50 @@ const isoToCountryName = (iso3) => {
   return countries.getName(alpha2, 'en') ?? iso3;
 };
 
+const formatAnswerDate = (round) => (
+  round.artifactEndYear !== round.artifactBeginYear
+    ? `${formatYear(round.artifactBeginYear)} – ${formatYear(round.artifactEndYear)}`
+    : formatYear(round.artifactBeginYear)
+);
+
+function RoundResultCard({ round, playerId, history = false }) {
+  const players = [...round.guesses].sort((a, b) => b.totalScore - a.totalScore);
+  return (
+    <section className={`br-result-card ${history ? 'br-history-round-card' : ''}`}>
+      <h3 className="br-reveal-heading">Round {round.round} Results</h3>
+      <div className="br-reveal-answer">
+        {round.artifactTitle && <div className="br-reveal-title">{round.artifactTitle}</div>}
+        <div className="br-reveal-answer-row">
+          <span className="br-reveal-label">Country</span>
+          <span className="br-reveal-value">{isoToCountryName(round.artifactIso3)}</span>
+        </div>
+        <div className="br-reveal-answer-row">
+          <span className="br-reveal-label">Date</span>
+          <span className="br-reveal-value">{formatAnswerDate(round)}</span>
+        </div>
+      </div>
+      <div className="br-reveal-players">
+        {players.map(guess => (
+          <div key={guess.playerId} className={`br-reveal-player ${guess.playerId === playerId ? 'is-you' : ''}`}>
+            <span className="br-reveal-player-name">
+              {guess.playerName}
+              {guess.playerId === playerId && <span className="br-you-tag">you</span>}
+              {guess.isEliminated && <span className="br-result-out-tag">out</span>}
+            </span>
+            <span className="br-reveal-player-guess">
+              {guess.countryGuessed ? `${isoToCountryName(guess.countryGuessed)} · ${formatYear(guess.yearGuessed)}` : 'No guess'}
+            </span>
+            <span className="br-reveal-player-score">{guess.totalScore.toLocaleString()} pts</span>
+            <span className={`br-reveal-player-dmg ${guess.hpLost === 0 ? 'best' : ''}`}>
+              {typeof guess.hpLost !== 'number' ? 'HP loss unavailable' : guess.hpLost === 0 ? 'No HP lost' : `-${guess.hpLost.toLocaleString()} HP`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function BattleRoyaleRoom() {
   const { gameId } = useParams();
   const [gameState, setGameState] = useState(null);
@@ -43,6 +87,7 @@ export default function BattleRoyaleRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const [intermission, setIntermission] = useState({ phase: 'none', countdown: null });
   const debounceRef = useRef(null);
@@ -319,8 +364,6 @@ export default function BattleRoyaleRoom() {
     const me = gameState.players.find(p => p.id === playerId);
     const activePlayers = gameState.players.filter(p => !p.isEliminated);
     const guessedCount = activePlayers.filter(p => p.hasGuessedThisRound).length;
-    const reveal = gameState.lastRoundReveal;
-    const maxRevealScore = reveal ? Math.max(...reveal.guesses.map(g => g.totalScore)) : 0;
     const isIntermission = intermission.phase !== 'none';
 
     return (
@@ -329,55 +372,27 @@ export default function BattleRoyaleRoom() {
         <div className="br-top-bar">
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
+          <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
           {timeRemaining !== null && (
             <div className={`br-timer ${timeRemaining <= 5 ? 'urgent' : ''}`}>{timeRemaining}s</div>
           )}
         </div>
 
         <div className="br-game-body">
-          {/* Artifact / reveal pane */}
+          {intermission.phase === 'results' && gameState.lastRoundReveal ? (
+            <div className="br-round-results">
+              <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
+            </div>
+          ) : <>
+          {/* Artifact pane */}
           <div className="br-artifact-pane">
-            {intermission.phase === 'results' && reveal ? (
-              <div className="br-reveal-overlay">
-                <h3 className="br-reveal-heading">Round {reveal.round} Results</h3>
-                <div className="br-reveal-answer">
-                  {reveal.artifactTitle && <div className="br-reveal-title">{reveal.artifactTitle}</div>}
-                  <div className="br-reveal-answer-row">
-                    <span className="br-reveal-label">Country</span>
-                    <span className="br-reveal-value">{isoToCountryName(reveal.artifactIso3)}</span>
-                  </div>
-                  <div className="br-reveal-answer-row">
-                    <span className="br-reveal-label">Year</span>
-                    <span className="br-reveal-value">
-                      {formatYear(reveal.artifactBeginYear)}
-                      {reveal.artifactEndYear !== reveal.artifactBeginYear
-                        ? ` – ${formatYear(reveal.artifactEndYear)}`
-                        : ''}
-                    </span>
-                  </div>
-                </div>
-                <div className="br-reveal-players">
-                  {[...reveal.guesses].sort((a, b) => b.totalScore - a.totalScore).map(g => (
-                    <div key={g.playerId} className="br-reveal-player">
-                      <span className="br-reveal-player-name">{g.playerName}</span>
-                      <span className="br-reveal-player-guess">
-                        {isoToCountryName(g.countryGuessed)} · {formatYear(g.yearGuessed)}
-                      </span>
-                      <span className="br-reveal-player-score">{g.totalScore.toLocaleString()} pts</span>
-                      <span className={`br-reveal-player-dmg ${g.totalScore >= maxRevealScore ? 'best' : ''}`}>
-                        {g.totalScore >= maxRevealScore ? '✓ best' : `-${(maxRevealScore - g.totalScore).toLocaleString()} HP`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
+            {
               gameState.currentArtifact && (
                 <div className="br-artifact-container">
                   <img src={gameState.currentArtifact.imageUrl} alt="Artifact" className="br-artifact-img" />
                 </div>
               )
-            )}
+            }
           </div>
 
           {/* Controls + health bars pane */}
@@ -438,6 +453,7 @@ export default function BattleRoyaleRoom() {
               })}
             </div>
           </div>
+          </>}
         </div>
         </div>
         {intermission.phase === 'countdown' && (
@@ -469,6 +485,12 @@ export default function BattleRoyaleRoom() {
             </div>
           ))}
         </div>
+        <button
+          className="br-history-button br-finished-history"
+          onClick={() => setIsHistoryOpen(true)}
+        >
+          History
+        </button>
         <button
           className="br-btn br-btn-secondary br-play-again"
           onClick={() => window.location.href = '/battle-royale'}
@@ -519,6 +541,22 @@ export default function BattleRoyaleRoom() {
       {gameState.status === 'waiting'  && renderLobby()}
       {gameState.status === 'active'   && renderActive()}
       {gameState.status === 'finished' && renderFinished()}
+      {isHistoryOpen && (
+        <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
+          <div className="br-history-panel">
+            <div className="br-history-header">
+              <h2>Round History</h2>
+              <button className="br-history-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close round history">×</button>
+            </div>
+            <div className="br-history-list">
+              {[...(gameState.roundHistory ?? [])].reverse().map(round => (
+                <RoundResultCard key={round.round} round={round} playerId={playerId} history />
+              ))}
+              {(gameState.roundHistory ?? []).length === 0 && <p className="br-history-empty">No completed rounds yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
