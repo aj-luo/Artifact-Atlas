@@ -36,6 +36,9 @@ const formatAnswerDate = (round) => (
 
 function RoundResultCard({ round, playerId, history = false }) {
   const players = [...round.guesses].sort((a, b) => b.totalScore - a.totalScore);
+  const metUrl = round.artifactObjectId
+    ? `https://www.metmuseum.org/art/collection/search/${encodeURIComponent(round.artifactObjectId)}`
+    : null;
   return (
     <section className={`br-result-card ${history ? 'br-history-round-card' : ''}`}>
       <h3 className="br-reveal-heading">Round {round.round} Results</h3>
@@ -48,6 +51,11 @@ function RoundResultCard({ round, playerId, history = false }) {
           />
         )}
         <div className="br-reveal-artifact-name">{round.artifactTitle ?? 'Unknown artifact'}</div>
+        {metUrl && (
+          <a className="br-met-link" href={metUrl} target="_blank" rel="noreferrer">
+            View on The Met ↗
+          </a>
+        )}
         <div className="br-reveal-answer-row">
           <span className="br-reveal-label">Country</span>
           <span className="br-reveal-value">{isoToCountryName(round.artifactIso3)}</span>
@@ -480,6 +488,11 @@ export default function BattleRoyaleRoom() {
       <div className="br-finished">
         <h2 className="br-finished-title">GAME OVER</h2>
         <h1 className="br-winner-name">{sorted[0].name} Wins!</h1>
+        {gameState.lastRoundReveal && (
+          <div className="br-finished-result">
+            <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
+          </div>
+        )}
         <div className="br-leaderboard">
           {sorted.map((p, i) => (
             <div key={p.id} className={`br-lb-row ${i === 0 ? 'winner' : ''}`}>

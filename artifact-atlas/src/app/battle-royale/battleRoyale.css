@@ -536,6 +536,20 @@
   margin: 0.25rem 0;
 }
 
+.br-met-link {
+  align-self: center;
+  color: #ff7795;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.br-met-link:hover,
+.br-met-link:focus-visible {
+  color: #fff;
+  text-decoration: underline;
+}
+
 .br-reveal-answer-row {
   display: flex;
   justify-content: space-between;
@@ -786,6 +800,7 @@
 
 .br-play-again { max-width: 220px; margin-top: 0.5rem; }
 .br-finished-history { margin-top: -0.5rem; }
+.br-finished-result { width: min(100%, 820px); }
 
 /* Persistent, read-only round history */
 .br-history-overlay {
