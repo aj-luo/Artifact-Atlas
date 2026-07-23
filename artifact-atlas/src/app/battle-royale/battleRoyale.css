@@ -413,6 +413,42 @@
   overflow: hidden;
 }
 
+.br-active-game {
+  position: relative;
+}
+
+.br-active-content {
+  transition: filter 180ms ease;
+}
+
+.br-active-content.is-intermission {
+  pointer-events: none;
+  user-select: none;
+}
+
+.br-active-content.is-countdown-blurred {
+  filter: blur(10px);
+}
+
+.br-round-countdown {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: rgba(5, 5, 12, 0.2);
+  pointer-events: auto;
+}
+
+.br-round-countdown span {
+  color: #fff;
+  font-size: clamp(7rem, 25vw, 16rem);
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: 0 0 24px rgba(255, 65, 108, 0.9), 0 8px 40px rgba(0, 0, 0, 0.8);
+}
+
 .br-artifact-container {
   width: 100%;
   height: 100%;
@@ -542,6 +578,18 @@
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: #888;
+}
+
+/* react-flags-select renders a light menu; override the page's inherited
+   white text so its search field and country names retain contrast. */
+.br-flag-select [class*="_selectOptions"],
+.br-flag-select [class*="_filterBox"] input {
+  color: #1b1b24;
+}
+
+.br-flag-select [class*="_filterBox"] input {
+  background: #fff;
+  caret-color: #1b1b24;
 }
 
 .br-year-row {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GameSession, GameSessionError } from '@/lib/multiplayer/GameSession';
+import { scheduleGameBroadcast } from '@/lib/multiplayer/scheduleBroadcast';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -21,8 +22,8 @@ export async function POST(_req: NextRequest, { params }: Params) {
     }
 
     await session.start();
-    void session.broadcastState();
-    return NextResponse.json({ ok: true });
+    scheduleGameBroadcast(session);
+    return NextResponse.json({ ok: true, ...session.getStatus() });
   } catch (err) {
     if (err instanceof GameSessionError) {
       return NextResponse.json({ error: err.message }, { status: err.statusCode });

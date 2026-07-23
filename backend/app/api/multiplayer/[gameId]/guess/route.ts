@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GameSession, GameSessionError } from '@/lib/multiplayer/GameSession';
+import { scheduleGameBroadcast } from '@/lib/multiplayer/scheduleBroadcast';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -17,6 +18,7 @@ type Params = { params: Promise<{ gameId: string }> };
  * Response: { score, roundResolved } + full GameStatusResponse
  */
 export async function POST(req: NextRequest, { params }: Params) {
+  let session: GameSession | null = null;
   try {
     const { gameId } = await params;
     const body = await req.json();
@@ -33,13 +35,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       );
     }
 
-    const session = await GameSession.load(gameId);
+    session = await GameSession.load(gameId);
     if (!session) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
     const { score, roundResolved } = await session.submitGuess(playerId, country, Number(year));
-    void session.broadcastState();
+    scheduleGameBroadcast(session);
 
     return NextResponse.json({
       score,
@@ -48,7 +50,11 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
   } catch (err) {
     if (err instanceof GameSessionError) {
-      return NextResponse.json({ error: err.message }, { status: err.statusCode });
+      if (err.stateChanged && session) scheduleGameBroadcast(session);
+      return NextResponse.json(
+        { error: err.message, ...(session ? session.getStatus() : {}) },
+        { status: err.statusCode },
+      );
     }
     console.error('[multiplayer/guess] Unhandled error:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });

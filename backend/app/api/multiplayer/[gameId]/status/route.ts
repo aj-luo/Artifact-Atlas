@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GameSession } from '@/lib/multiplayer/GameSession';
+import { scheduleGameBroadcast } from '@/lib/multiplayer/scheduleBroadcast';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -26,7 +27,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
 
     // Lazy timer resolution — if the round timer has expired and no more guesses
     // are coming in, polling this endpoint will eventually trigger the round end.
-    await session.resolveRoundIfNeeded();
+    const resolved = await session.resolveRoundIfNeeded();
+    if (resolved) scheduleGameBroadcast(session);
 
     return NextResponse.json(session.getStatus());
   } catch (err) {

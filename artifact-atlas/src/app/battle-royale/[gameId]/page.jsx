@@ -8,6 +8,7 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
+import { estimateServerClockOffset, getIntermissionPhase, shouldApplyRevision } from './snapshotSync.js';
 import '../battleRoyale.css';
 
 countries.registerLocale(enLocale);
@@ -43,10 +44,10 @@ export default function BattleRoyaleRoom() {
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState(null);
 
-  const [showReveal, setShowReveal] = useState(false);
-  // Ref instead of state so fetchStatus doesn't need it as a dep
-  const lastRoundNumRef = useRef(0);
+  const [intermission, setIntermission] = useState({ phase: 'none', countdown: null });
   const debounceRef = useRef(null);
+  const latestRevisionRef = useRef(-1);
+  const serverClockOffsetRef = useRef(0);
   const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
 
@@ -55,26 +56,46 @@ export default function BattleRoyaleRoom() {
     if (saved) setPlayerId(saved);
   }, [gameId]);
 
+  // The server advances to the next artifact before the intermission begins.
+  // Warm the browser cache while results are visible so the image is ready
+  // underneath the blurred countdown.
+  useEffect(() => {
+    const imageUrl = gameState?.currentArtifact?.imageUrl;
+    if (!imageUrl) return;
+    const image = new Image();
+    image.src = imageUrl;
+  }, [gameState?.currentArtifact?.imageUrl]);
+
+  // All state sources use the same monotonic revision gate. serverTime also
+  // aligns the countdown without trusting the device's wall clock.
+  const applySnapshot = useCallback((data, requestedAt = null, receivedAt = null) => {
+    if (!data || !shouldApplyRevision(latestRevisionRef.current, data.revision)) return false;
+
+    latestRevisionRef.current = data.revision;
+    // Only an HTTP request/response midpoint can distinguish clock skew from
+    // network delay. A delayed broadcast must not move the estimated clock.
+    if (data.serverTime && requestedAt != null && receivedAt != null) {
+      serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt);
+    }
+    setGameState(data);
+    return true;
+  }, []);
+
   // Stable callback — only recreated when gameId changes
   const fetchStatus = useCallback(async () => {
     try {
+      const requestedAt = Date.now();
       const res = await fetch(`/api/multiplayer/${gameId}/status`);
       if (res.ok) {
         const data = await res.json();
-        setGameState(data);
-        if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNumRef.current) {
-          lastRoundNumRef.current = data.lastRoundReveal.round;
-          setShowReveal(true);
-          setTimeout(() => setShowReveal(false), 5000);
-        }
+        applySnapshot(data, requestedAt, Date.now());
       }
     } catch (err) {
       console.error('Status fetch error', err);
     }
-  }, [gameId]);
+  }, [gameId, applySnapshot]);
 
-  // Batches rapid-fire postgres_changes events (e.g. N player rows + game row on round resolution)
-  // into a single fetchStatus call instead of N+1 parallel HTTP requests.
+  // Batch rapid game-row invalidations into one status request.
   const debouncedFetchStatus = useCallback(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(fetchStatus, 50);
@@ -89,30 +110,37 @@ export default function BattleRoyaleRoom() {
       // Broadcast: full game state delivered by the server directly after each mutation,
       // no HTTP round-trip needed on the client side.
       .on('broadcast', { event: 'game_update' }, ({ payload }) => {
-        setGameState(payload);
-        if (payload.lastRoundReveal && payload.lastRoundReveal.round > lastRoundNumRef.current) {
-          lastRoundNumRef.current = payload.lastRoundReveal.round;
-          setShowReveal(true);
-          setTimeout(() => setShowReveal(false), 5000);
-        }
+        applySnapshot(payload);
       })
       // postgres_changes: safety fallback for any broadcast misses
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games',   filter: `id=eq.${gameId}` },      debouncedFetchStatus)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_guesses', filter: `game_id=eq.${gameId}` }, debouncedFetchStatus)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_players', filter: `game_id=eq.${gameId}` }, debouncedFetchStatus)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games', filter: `id=eq.${gameId}` }, debouncedFetchStatus)
       .subscribe((status) => setChannelStatus(status));
 
     return () => {
       supabase.removeChannel(channel);
       clearTimeout(debounceRef.current);
     };
-  }, [gameId, fetchStatus, debouncedFetchStatus]);
+  }, [gameId, fetchStatus, debouncedFetchStatus, applySnapshot]);
 
-  // Adaptive polling: 10s when realtime is healthy, 2s when degraded
+  // Healthy polling is only a slow recovery net; degraded realtime stays eager.
   useEffect(() => {
-    const interval = setInterval(fetchStatus, channelStatus === 'SUBSCRIBED' ? 10000 : 2000);
+    const interval = setInterval(fetchStatus, channelStatus === 'SUBSCRIBED' ? 30000 : 2000);
     return () => clearInterval(interval);
   }, [channelStatus, fetchStatus]);
+
+  // Recover immediately after a disconnected device or background tab returns.
+  useEffect(() => {
+    const handleOnline = () => void fetchStatus();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void fetchStatus();
+    };
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchStatus]);
 
   // Countdown timer — triggers server-side round resolution the moment the clock hits 0
   useEffect(() => {
@@ -121,7 +149,8 @@ export default function BattleRoyaleRoom() {
       return;
     }
     const interval = setInterval(() => {
-      const diff = Math.max(0, Math.floor((new Date(gameState.roundEndsAt).getTime() - Date.now()) / 1000));
+      const serverNow = Date.now() + serverClockOffsetRef.current;
+      const diff = Math.max(0, Math.ceil((new Date(gameState.roundEndsAt).getTime() - serverNow) / 1000));
       setTimeRemaining(diff);
       if (diff === 0) {
         clearInterval(interval);
@@ -132,6 +161,17 @@ export default function BattleRoyaleRoom() {
     }, 200);
     return () => clearInterval(interval);
   }, [gameState?.roundEndsAt, gameState?.status, fetchStatus]);
+
+  useEffect(() => {
+    const updateIntermission = () => {
+      const serverNow = Date.now() + serverClockOffsetRef.current;
+      setIntermission(getIntermissionPhase(gameState?.roundStartsAt, serverNow));
+    };
+    updateIntermission();
+    if (!gameState?.roundStartsAt || gameState.status !== 'active') return undefined;
+    const interval = setInterval(updateIntermission, 100);
+    return () => clearInterval(interval);
+  }, [gameState?.roundStartsAt, gameState?.status]);
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -147,7 +187,7 @@ export default function BattleRoyaleRoom() {
         const data = await res.json();
         setPlayerId(data.playerId);
         localStorage.setItem(`br_player_${gameId}`, data.playerId);
-        await fetchStatus();
+        applySnapshot(data);
       }
     } catch (err) {
       console.error(err);
@@ -161,7 +201,7 @@ export default function BattleRoyaleRoom() {
     try {
       const res = await fetch(`/api/multiplayer/${gameId}/start`, { method: 'POST' });
       if (res.ok) {
-        await fetchStatus();
+        applySnapshot(await res.json());
       } else {
         const data = await res.json().catch(() => ({}));
         setStartError(data.error ?? 'Failed to start game');
@@ -199,12 +239,11 @@ export default function BattleRoyaleRoom() {
       // so the UI updates within network RTT rather than waiting for the next poll.
       if (res.ok) {
         const data = await res.json();
-        setGameState(data);
-        if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNumRef.current) {
-          lastRoundNumRef.current = data.lastRoundReveal.round;
-          setShowReveal(true);
-          setTimeout(() => setShowReveal(false), 5000);
-        }
+        applySnapshot(data);
+      } else {
+        // Late-guess rejections include the authoritative post-expiry snapshot.
+        const data = await res.json().catch(() => null);
+        if (data?.revision != null) applySnapshot(data);
       }
     } catch (err) {
       console.error(err);
@@ -282,9 +321,11 @@ export default function BattleRoyaleRoom() {
     const guessedCount = activePlayers.filter(p => p.hasGuessedThisRound).length;
     const reveal = gameState.lastRoundReveal;
     const maxRevealScore = reveal ? Math.max(...reveal.guesses.map(g => g.totalScore)) : 0;
+    const isIntermission = intermission.phase !== 'none';
 
     return (
       <div className="br-active-game">
+        <div className={`br-active-content ${intermission.phase === 'countdown' ? 'is-countdown-blurred' : ''} ${isIntermission ? 'is-intermission' : ''}`}>
         <div className="br-top-bar">
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
@@ -296,7 +337,7 @@ export default function BattleRoyaleRoom() {
         <div className="br-game-body">
           {/* Artifact / reveal pane */}
           <div className="br-artifact-pane">
-            {showReveal && reveal ? (
+            {intermission.phase === 'results' && reveal ? (
               <div className="br-reveal-overlay">
                 <h3 className="br-reveal-heading">Round {reveal.round} Results</h3>
                 <div className="br-reveal-answer">
@@ -340,7 +381,7 @@ export default function BattleRoyaleRoom() {
           </div>
 
           {/* Controls + health bars pane */}
-          <div className="br-controls-pane">
+          <div className="br-controls-pane" inert={isIntermission}>
             {me?.isEliminated ? (
               <div className="br-eliminated">You were eliminated. Spectating…</div>
             ) : me?.hasGuessedThisRound ? (
@@ -398,6 +439,12 @@ export default function BattleRoyaleRoom() {
             </div>
           </div>
         </div>
+        </div>
+        {intermission.phase === 'countdown' && (
+          <div className="br-round-countdown" role="timer" aria-live="assertive" aria-label={`Next round starts in ${intermission.countdown}`}>
+            <span>{intermission.countdown}</span>
+          </div>
+        )}
       </div>
     );
   };

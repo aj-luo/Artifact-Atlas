@@ -161,6 +161,7 @@ model iso_code_mapping {
 
 model multiplayer_games {
   id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  revision            Int       @default(0)
   status              String    @default("waiting") @db.VarChar(16) // waiting | active | finished
   current_round       Int       @default(0)
   max_rounds          Int       @default(10)
@@ -175,6 +176,8 @@ model multiplayer_games {
   artifact_title      String?
   // Set to now()+20s on the first guess of a round; null at round start
   round_ends_at       DateTime? @db.Timestamptz(6)
+  // Next round becomes interactive at this authoritative database timestamp
+  round_starts_at     DateTime? @db.Timestamptz(6)
   // JSON blob of previous round's reveal (country, year, scores) for UI display
   last_round_reveal   Json?
   created_at          DateTime  @default(now()) @db.Timestamptz(6)
