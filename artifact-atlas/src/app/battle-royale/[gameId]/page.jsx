@@ -38,7 +38,9 @@ function RoundResultCard({ round, playerId, history = false }) {
   const players = [...round.guesses].sort((a, b) => b.totalScore - a.totalScore);
   const metUrl = round.artifactObjectId
     ? `https://www.metmuseum.org/art/collection/search/${encodeURIComponent(round.artifactObjectId)}`
-    : null;
+    : round.artifactTitle
+      ? `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(round.artifactTitle)}`
+      : 'https://www.metmuseum.org/art/collection';
   return (
     <section className={`br-result-card ${history ? 'br-history-round-card' : ''}`}>
       <h3 className="br-reveal-heading">Round {round.round} Results</h3>
@@ -51,11 +53,9 @@ function RoundResultCard({ round, playerId, history = false }) {
           />
         )}
         <div className="br-reveal-artifact-name">{round.artifactTitle ?? 'Unknown artifact'}</div>
-        {metUrl && (
-          <a className="br-met-link" href={metUrl} target="_blank" rel="noreferrer">
-            View on The Met ↗
-          </a>
-        )}
+        <a className="br-met-link" href={metUrl} target="_blank" rel="noreferrer">
+          View on The Met ↗
+        </a>
         <div className="br-reveal-answer-row">
           <span className="br-reveal-label">Country</span>
           <span className="br-reveal-value">{isoToCountryName(round.artifactIso3)}</span>
