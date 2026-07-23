@@ -8,6 +8,7 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
+import { estimateServerClockOffset, getIntermissionPhase, shouldApplyRevision } from './snapshotSync.js';
 import '../battleRoyale.css';
 
 countries.registerLocale(enLocale);
@@ -27,6 +28,65 @@ const isoToCountryName = (iso3) => {
   return countries.getName(alpha2, 'en') ?? iso3;
 };
 
+const formatAnswerDate = (round) => (
+  round.artifactEndYear !== round.artifactBeginYear
+    ? `${formatYear(round.artifactBeginYear)} – ${formatYear(round.artifactEndYear)}`
+    : formatYear(round.artifactBeginYear)
+);
+
+function RoundResultCard({ round, playerId, history = false }) {
+  const players = [...round.guesses].sort((a, b) => b.totalScore - a.totalScore);
+  const metUrl = round.artifactObjectId
+    ? `https://www.metmuseum.org/art/collection/search/${encodeURIComponent(round.artifactObjectId)}`
+    : round.artifactTitle
+      ? `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(round.artifactTitle)}`
+      : 'https://www.metmuseum.org/art/collection';
+  return (
+    <section className={`br-result-card ${history ? 'br-history-round-card' : ''}`}>
+      <h3 className="br-reveal-heading">Round {round.round} Results</h3>
+      <div className="br-reveal-answer">
+        {round.artifactImageUrl && (
+          <img
+            src={round.artifactImageUrl}
+            alt={round.artifactTitle ?? 'Revealed artifact'}
+            className="br-reveal-artifact-image"
+          />
+        )}
+        <div className="br-reveal-artifact-name">{round.artifactTitle ?? 'Unknown artifact'}</div>
+        <a className="br-met-link" href={metUrl} target="_blank" rel="noreferrer">
+          View on The Met ↗
+        </a>
+        <div className="br-reveal-answer-row">
+          <span className="br-reveal-label">Country</span>
+          <span className="br-reveal-value">{isoToCountryName(round.artifactIso3)}</span>
+        </div>
+        <div className="br-reveal-answer-row">
+          <span className="br-reveal-label">Date</span>
+          <span className="br-reveal-value">{formatAnswerDate(round)}</span>
+        </div>
+      </div>
+      <div className="br-reveal-players">
+        {players.map(guess => (
+          <div key={guess.playerId} className={`br-reveal-player ${guess.playerId === playerId ? 'is-you' : ''}`}>
+            <span className="br-reveal-player-name">
+              {guess.playerName}
+              {guess.playerId === playerId && <span className="br-you-tag">you</span>}
+              {guess.isEliminated && <span className="br-result-out-tag">out</span>}
+            </span>
+            <span className="br-reveal-player-guess">
+              {guess.countryGuessed ? `${isoToCountryName(guess.countryGuessed)} · ${formatYear(guess.yearGuessed)}` : 'No guess'}
+            </span>
+            <span className="br-reveal-player-score">{guess.totalScore.toLocaleString()} pts</span>
+            <span className={`br-reveal-player-dmg ${guess.hpLost === 0 ? 'best' : ''}`}>
+              {typeof guess.hpLost !== 'number' ? 'HP loss unavailable' : guess.hpLost === 0 ? 'No HP lost' : `-${guess.hpLost.toLocaleString()} HP`}
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function BattleRoyaleRoom() {
   const { gameId } = useParams();
   const [gameState, setGameState] = useState(null);
@@ -42,11 +102,12 @@ export default function BattleRoyaleRoom() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
-  const [showReveal, setShowReveal] = useState(false);
-  // Ref instead of state so fetchStatus doesn't need it as a dep
-  const lastRoundNumRef = useRef(0);
+  const [intermission, setIntermission] = useState({ phase: 'none', countdown: null });
   const debounceRef = useRef(null);
+  const latestRevisionRef = useRef(-1);
+  const serverClockOffsetRef = useRef(0);
   const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
 
@@ -55,26 +116,46 @@ export default function BattleRoyaleRoom() {
     if (saved) setPlayerId(saved);
   }, [gameId]);
 
+  // The server advances to the next artifact before the intermission begins.
+  // Warm the browser cache while results are visible so the image is ready
+  // underneath the blurred countdown.
+  useEffect(() => {
+    const imageUrl = gameState?.currentArtifact?.imageUrl;
+    if (!imageUrl) return;
+    const image = new Image();
+    image.src = imageUrl;
+  }, [gameState?.currentArtifact?.imageUrl]);
+
+  // All state sources use the same monotonic revision gate. serverTime also
+  // aligns the countdown without trusting the device's wall clock.
+  const applySnapshot = useCallback((data, requestedAt = null, receivedAt = null) => {
+    if (!data || !shouldApplyRevision(latestRevisionRef.current, data.revision)) return false;
+
+    latestRevisionRef.current = data.revision;
+    // Only an HTTP request/response midpoint can distinguish clock skew from
+    // network delay. A delayed broadcast must not move the estimated clock.
+    if (data.serverTime && requestedAt != null && receivedAt != null) {
+      serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt);
+    }
+    setGameState(data);
+    return true;
+  }, []);
+
   // Stable callback — only recreated when gameId changes
   const fetchStatus = useCallback(async () => {
     try {
+      const requestedAt = Date.now();
       const res = await fetch(`/api/multiplayer/${gameId}/status`);
       if (res.ok) {
         const data = await res.json();
-        setGameState(data);
-        if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNumRef.current) {
-          lastRoundNumRef.current = data.lastRoundReveal.round;
-          setShowReveal(true);
-          setTimeout(() => setShowReveal(false), 5000);
-        }
+        applySnapshot(data, requestedAt, Date.now());
       }
     } catch (err) {
       console.error('Status fetch error', err);
     }
-  }, [gameId]);
+  }, [gameId, applySnapshot]);
 
-  // Batches rapid-fire postgres_changes events (e.g. N player rows + game row on round resolution)
-  // into a single fetchStatus call instead of N+1 parallel HTTP requests.
+  // Batch rapid game-row invalidations into one status request.
   const debouncedFetchStatus = useCallback(() => {
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(fetchStatus, 50);
@@ -89,30 +170,37 @@ export default function BattleRoyaleRoom() {
       // Broadcast: full game state delivered by the server directly after each mutation,
       // no HTTP round-trip needed on the client side.
       .on('broadcast', { event: 'game_update' }, ({ payload }) => {
-        setGameState(payload);
-        if (payload.lastRoundReveal && payload.lastRoundReveal.round > lastRoundNumRef.current) {
-          lastRoundNumRef.current = payload.lastRoundReveal.round;
-          setShowReveal(true);
-          setTimeout(() => setShowReveal(false), 5000);
-        }
+        applySnapshot(payload);
       })
       // postgres_changes: safety fallback for any broadcast misses
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games',   filter: `id=eq.${gameId}` },      debouncedFetchStatus)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_guesses', filter: `game_id=eq.${gameId}` }, debouncedFetchStatus)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_players', filter: `game_id=eq.${gameId}` }, debouncedFetchStatus)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games', filter: `id=eq.${gameId}` }, debouncedFetchStatus)
       .subscribe((status) => setChannelStatus(status));
 
     return () => {
       supabase.removeChannel(channel);
       clearTimeout(debounceRef.current);
     };
-  }, [gameId, fetchStatus, debouncedFetchStatus]);
+  }, [gameId, fetchStatus, debouncedFetchStatus, applySnapshot]);
 
-  // Adaptive polling: 10s when realtime is healthy, 2s when degraded
+  // Healthy polling is only a slow recovery net; degraded realtime stays eager.
   useEffect(() => {
-    const interval = setInterval(fetchStatus, channelStatus === 'SUBSCRIBED' ? 10000 : 2000);
+    const interval = setInterval(fetchStatus, channelStatus === 'SUBSCRIBED' ? 30000 : 2000);
     return () => clearInterval(interval);
   }, [channelStatus, fetchStatus]);
+
+  // Recover immediately after a disconnected device or background tab returns.
+  useEffect(() => {
+    const handleOnline = () => void fetchStatus();
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') void fetchStatus();
+    };
+    window.addEventListener('online', handleOnline);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [fetchStatus]);
 
   // Countdown timer — triggers server-side round resolution the moment the clock hits 0
   useEffect(() => {
@@ -121,7 +209,8 @@ export default function BattleRoyaleRoom() {
       return;
     }
     const interval = setInterval(() => {
-      const diff = Math.max(0, Math.floor((new Date(gameState.roundEndsAt).getTime() - Date.now()) / 1000));
+      const serverNow = Date.now() + serverClockOffsetRef.current;
+      const diff = Math.max(0, Math.ceil((new Date(gameState.roundEndsAt).getTime() - serverNow) / 1000));
       setTimeRemaining(diff);
       if (diff === 0) {
         clearInterval(interval);
@@ -132,6 +221,17 @@ export default function BattleRoyaleRoom() {
     }, 200);
     return () => clearInterval(interval);
   }, [gameState?.roundEndsAt, gameState?.status, fetchStatus]);
+
+  useEffect(() => {
+    const updateIntermission = () => {
+      const serverNow = Date.now() + serverClockOffsetRef.current;
+      setIntermission(getIntermissionPhase(gameState?.roundStartsAt, serverNow));
+    };
+    updateIntermission();
+    if (!gameState?.roundStartsAt || gameState.status !== 'active') return undefined;
+    const interval = setInterval(updateIntermission, 100);
+    return () => clearInterval(interval);
+  }, [gameState?.roundStartsAt, gameState?.status]);
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -147,7 +247,7 @@ export default function BattleRoyaleRoom() {
         const data = await res.json();
         setPlayerId(data.playerId);
         localStorage.setItem(`br_player_${gameId}`, data.playerId);
-        await fetchStatus();
+        applySnapshot(data);
       }
     } catch (err) {
       console.error(err);
@@ -161,7 +261,7 @@ export default function BattleRoyaleRoom() {
     try {
       const res = await fetch(`/api/multiplayer/${gameId}/start`, { method: 'POST' });
       if (res.ok) {
-        await fetchStatus();
+        applySnapshot(await res.json());
       } else {
         const data = await res.json().catch(() => ({}));
         setStartError(data.error ?? 'Failed to start game');
@@ -199,12 +299,11 @@ export default function BattleRoyaleRoom() {
       // so the UI updates within network RTT rather than waiting for the next poll.
       if (res.ok) {
         const data = await res.json();
-        setGameState(data);
-        if (data.lastRoundReveal && data.lastRoundReveal.round > lastRoundNumRef.current) {
-          lastRoundNumRef.current = data.lastRoundReveal.round;
-          setShowReveal(true);
-          setTimeout(() => setShowReveal(false), 5000);
-        }
+        applySnapshot(data);
+      } else {
+        // Late-guess rejections include the authoritative post-expiry snapshot.
+        const data = await res.json().catch(() => null);
+        if (data?.revision != null) applySnapshot(data);
       }
     } catch (err) {
       console.error(err);
@@ -280,67 +379,39 @@ export default function BattleRoyaleRoom() {
     const me = gameState.players.find(p => p.id === playerId);
     const activePlayers = gameState.players.filter(p => !p.isEliminated);
     const guessedCount = activePlayers.filter(p => p.hasGuessedThisRound).length;
-    const reveal = gameState.lastRoundReveal;
-    const maxRevealScore = reveal ? Math.max(...reveal.guesses.map(g => g.totalScore)) : 0;
+    const isIntermission = intermission.phase !== 'none';
 
     return (
       <div className="br-active-game">
+        <div className={`br-active-content ${intermission.phase === 'countdown' ? 'is-countdown-blurred' : ''} ${isIntermission ? 'is-intermission' : ''}`}>
         <div className="br-top-bar">
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
+          <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
           {timeRemaining !== null && (
             <div className={`br-timer ${timeRemaining <= 5 ? 'urgent' : ''}`}>{timeRemaining}s</div>
           )}
         </div>
 
         <div className="br-game-body">
-          {/* Artifact / reveal pane */}
+          {intermission.phase === 'results' && gameState.lastRoundReveal ? (
+            <div className="br-round-results">
+              <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
+            </div>
+          ) : <>
+          {/* Artifact pane */}
           <div className="br-artifact-pane">
-            {showReveal && reveal ? (
-              <div className="br-reveal-overlay">
-                <h3 className="br-reveal-heading">Round {reveal.round} Results</h3>
-                <div className="br-reveal-answer">
-                  {reveal.artifactTitle && <div className="br-reveal-title">{reveal.artifactTitle}</div>}
-                  <div className="br-reveal-answer-row">
-                    <span className="br-reveal-label">Country</span>
-                    <span className="br-reveal-value">{isoToCountryName(reveal.artifactIso3)}</span>
-                  </div>
-                  <div className="br-reveal-answer-row">
-                    <span className="br-reveal-label">Year</span>
-                    <span className="br-reveal-value">
-                      {formatYear(reveal.artifactBeginYear)}
-                      {reveal.artifactEndYear !== reveal.artifactBeginYear
-                        ? ` – ${formatYear(reveal.artifactEndYear)}`
-                        : ''}
-                    </span>
-                  </div>
-                </div>
-                <div className="br-reveal-players">
-                  {[...reveal.guesses].sort((a, b) => b.totalScore - a.totalScore).map(g => (
-                    <div key={g.playerId} className="br-reveal-player">
-                      <span className="br-reveal-player-name">{g.playerName}</span>
-                      <span className="br-reveal-player-guess">
-                        {isoToCountryName(g.countryGuessed)} · {formatYear(g.yearGuessed)}
-                      </span>
-                      <span className="br-reveal-player-score">{g.totalScore.toLocaleString()} pts</span>
-                      <span className={`br-reveal-player-dmg ${g.totalScore >= maxRevealScore ? 'best' : ''}`}>
-                        {g.totalScore >= maxRevealScore ? '✓ best' : `-${(maxRevealScore - g.totalScore).toLocaleString()} HP`}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
+            {
               gameState.currentArtifact && (
                 <div className="br-artifact-container">
                   <img src={gameState.currentArtifact.imageUrl} alt="Artifact" className="br-artifact-img" />
                 </div>
               )
-            )}
+            }
           </div>
 
           {/* Controls + health bars pane */}
-          <div className="br-controls-pane">
+          <div className="br-controls-pane" inert={isIntermission}>
             {me?.isEliminated ? (
               <div className="br-eliminated">You were eliminated. Spectating…</div>
             ) : me?.hasGuessedThisRound ? (
@@ -397,7 +468,14 @@ export default function BattleRoyaleRoom() {
               })}
             </div>
           </div>
+          </>}
         </div>
+        </div>
+        {intermission.phase === 'countdown' && (
+          <div className="br-round-countdown" role="timer" aria-live="assertive" aria-label={`Next round starts in ${intermission.countdown}`}>
+            <span>{intermission.countdown}</span>
+          </div>
+        )}
       </div>
     );
   };
@@ -410,6 +488,11 @@ export default function BattleRoyaleRoom() {
       <div className="br-finished">
         <h2 className="br-finished-title">GAME OVER</h2>
         <h1 className="br-winner-name">{sorted[0].name} Wins!</h1>
+        {gameState.lastRoundReveal && (
+          <div className="br-finished-result">
+            <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
+          </div>
+        )}
         <div className="br-leaderboard">
           {sorted.map((p, i) => (
             <div key={p.id} className={`br-lb-row ${i === 0 ? 'winner' : ''}`}>
@@ -422,6 +505,12 @@ export default function BattleRoyaleRoom() {
             </div>
           ))}
         </div>
+        <button
+          className="br-history-button br-finished-history"
+          onClick={() => setIsHistoryOpen(true)}
+        >
+          History
+        </button>
         <button
           className="br-btn br-btn-secondary br-play-again"
           onClick={() => window.location.href = '/battle-royale'}
@@ -472,6 +561,22 @@ export default function BattleRoyaleRoom() {
       {gameState.status === 'waiting'  && renderLobby()}
       {gameState.status === 'active'   && renderActive()}
       {gameState.status === 'finished' && renderFinished()}
+      {isHistoryOpen && (
+        <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
+          <div className="br-history-panel">
+            <div className="br-history-header">
+              <h2>Round History</h2>
+              <button className="br-history-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close round history">×</button>
+            </div>
+            <div className="br-history-list">
+              {[...(gameState.roundHistory ?? [])].reverse().map(round => (
+                <RoundResultCard key={round.round} round={round} playerId={playerId} history />
+              ))}
+              {(gameState.roundHistory ?? []).length === 0 && <p className="br-history-empty">No completed rounds yet.</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

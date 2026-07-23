@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { notifications } from '@mantine/notifications';
 import './battleRoyale.css';
 import logo from '../../assets/AA_logo.png';
 
@@ -36,9 +37,12 @@ export default function BattleRoyaleLobby() {
 
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-  const showToast = (msg) => {
-    setError(msg);
-    setTimeout(() => setError(null), 3000);
+  const showInvalidGameId = () => {
+    notifications.show({
+      color: 'red',
+      message: 'Invalid Game ID',
+      withCloseButton: true,
+    });
   };
 
   const handleJoinGame = async (e) => {
@@ -46,19 +50,19 @@ export default function BattleRoyaleLobby() {
     const raw = joinGameId.trim();
     if (!raw) return;
     if (!uuidRegex.test(raw)) {
-      showToast('Invalid Game ID');
+      showInvalidGameId();
       return;
     }
     setIsChecking(true);
     try {
       const res = await fetch(`/api/multiplayer/${raw}/exists`);
       if (!res.ok) {
-        showToast('Invalid Game ID');
+        showInvalidGameId();
         return;
       }
       router.push(`/battle-royale/${raw}`);
     } catch {
-      showToast('Invalid Game ID');
+      showInvalidGameId();
     } finally {
       setIsChecking(false);
     }

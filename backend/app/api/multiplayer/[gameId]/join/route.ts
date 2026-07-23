@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { GameSession, GameSessionError } from '@/lib/multiplayer/GameSession';
+import { scheduleGameBroadcast } from '@/lib/multiplayer/scheduleBroadcast';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -29,8 +30,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
 
     const { playerId } = await session.join(name);
-    void session.broadcastState();
-    return NextResponse.json({ playerId }, { status: 201 });
+    scheduleGameBroadcast(session);
+    return NextResponse.json({ playerId, ...session.getStatus() }, { status: 201 });
   } catch (err) {
     if (err instanceof GameSessionError) {
       return NextResponse.json({ error: err.message }, { status: err.statusCode });
