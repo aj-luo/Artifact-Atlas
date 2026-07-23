@@ -520,11 +520,20 @@
   gap: 0.5rem;
 }
 
-.br-reveal-title {
-  font-size: 0.85rem;
-  color: #ccc;
-  font-style: italic;
-  margin-bottom: 0.25rem;
+.br-reveal-artifact-image {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.br-reveal-artifact-name {
+  font-size: 1.1rem;
+  color: #fff;
+  font-weight: 700;
+  text-align: center;
+  margin: 0.25rem 0;
 }
 
 .br-reveal-answer-row {

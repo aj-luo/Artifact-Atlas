@@ -31,6 +31,7 @@ export interface LastRoundReveal {
   artifactBeginYear: number;
   artifactEndYear: number;
   artifactTitle: string | null;
+  artifactImageUrl: string | null;
   guesses: RoundGuessResult[];
 }
 
@@ -320,6 +321,7 @@ export class GameSession {
       artifactBeginYear: game.artifact_begin_year!,
       artifactEndYear: game.artifact_end_year!,
       artifactTitle: game.artifact_title ?? null,
+      artifactImageUrl: game.artifact_image_url ?? null,
       guesses: updatedPlayers.map((player) => {
         const guess = revealGuesses.find((item) => item.player_id === player.id);
         return {

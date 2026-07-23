@@ -40,7 +40,14 @@ function RoundResultCard({ round, playerId, history = false }) {
     <section className={`br-result-card ${history ? 'br-history-round-card' : ''}`}>
       <h3 className="br-reveal-heading">Round {round.round} Results</h3>
       <div className="br-reveal-answer">
-        {round.artifactTitle && <div className="br-reveal-title">{round.artifactTitle}</div>}
+        {round.artifactImageUrl && (
+          <img
+            src={round.artifactImageUrl}
+            alt={round.artifactTitle ?? 'Revealed artifact'}
+            className="br-reveal-artifact-image"
+          />
+        )}
+        <div className="br-reveal-artifact-name">{round.artifactTitle ?? 'Unknown artifact'}</div>
         <div className="br-reveal-answer-row">
           <span className="br-reveal-label">Country</span>
           <span className="br-reveal-value">{isoToCountryName(round.artifactIso3)}</span>
