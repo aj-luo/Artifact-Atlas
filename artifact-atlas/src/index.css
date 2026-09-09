@@ -2,11 +2,12 @@
   font-family: "Nunito", sans-serif;
   font-weight: 900;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  --mantine-color-body: #242424 !important;
 }
 
 body {
   margin: 0;
+  background-color: #242424 !important;
 }
 
 .page {

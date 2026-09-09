@@ -3,8 +3,7 @@ import styles from './Masterpage.module.css';
 function Masterpage({ setCurrentView }) {
   return (
     <div className={styles.home}>
-      <p className={styles.tagline}>WELCOME TO ARTIFACT ATLAS!</p>
-      <p className={styles.tagline}>CHOOSE YOUR GAME MODE:</p>
+      <p className={styles.tagline}>WELCOME TO ARTIFACT ATLAS! CHOOSE YOUR GAME MODE:</p>
 
 
       <div className={styles.cardContainer}>
