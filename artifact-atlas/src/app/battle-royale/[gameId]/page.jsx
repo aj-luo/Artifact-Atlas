@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { QRCodeSVG } from 'qrcode.react';
 import ReactFlagsSelect from "react-flags-select";
 import countries from 'i18n-iso-countries';
@@ -89,6 +89,7 @@ function RoundResultCard({ round, playerId, history = false }) {
 
 export default function BattleRoyaleRoom() {
   const { gameId } = useParams();
+  const router = useRouter();
   const [gameState, setGameState] = useState(null);
   const [playerId, setPlayerId] = useState('');
   const [playerName, setPlayerName] = useState('');
@@ -511,12 +512,17 @@ export default function BattleRoyaleRoom() {
         >
           History
         </button>
-        <button
-          className="br-btn br-btn-secondary br-play-again"
-          onClick={() => window.location.href = '/battle-royale'}
-        >
-          PLAY AGAIN
-        </button>
+        <div className="br-finished-actions">
+          <button className="br-btn br-btn-secondary" onClick={() => router.push('/')}>
+            HOME
+          </button>
+          <button
+            className="br-btn br-btn-secondary"
+            onClick={() => router.push('/battle-royale')}
+          >
+            PLAY AGAIN
+          </button>
+        </div>
       </div>
     );
   };

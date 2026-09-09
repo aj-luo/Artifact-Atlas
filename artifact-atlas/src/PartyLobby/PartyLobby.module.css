@@ -29,7 +29,7 @@
 .start_button {
     border-radius: 10px;
     height: 52px;
-    width: 220px;
+    width: 180px;
     background: transparent;
     border: 0.5px solid white;
     color: white;
@@ -39,10 +39,6 @@
     cursor: pointer;
     letter-spacing: 0.1em;
     transition: all 0.2s ease-in-out;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
 }
 
 .button_container {
@@ -89,4 +85,39 @@
 
 .archelogistsImage {
     height: 400px;
+}
+
+/* Container holding both action blocks side-by-side */
+.actionContainer {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;          /* Space between CREATE LOBBY and the JOIN group */
+    flex-wrap: wrap;     /* Wraps cleanly on small screens */
+}
+
+/* Grouping the JOIN button directly next to its input */
+.joinGroup {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;           /* Space between JOIN button and Input */
+}
+
+/* Base style for the input field to match your theme */
+.lobbyInput {
+    height: 52px;       /* Matches button height */
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 0.5px solid rgba(255, 255, 255, 0.4);
+    background: rgba(0, 0, 0, 0.2);
+    color: white;
+    font-size: 1rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+}
+
+.lobbyInput:focus {
+    border-color: #ffffff;
 }

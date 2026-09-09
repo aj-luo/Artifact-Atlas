@@ -364,21 +364,32 @@ export class GameSession {
 
   getStatus(): GameStatusResponse {
     const players = [...this.players].sort((a, b) => a.created_at.getTime() - b.created_at.getTime());
-    const storedHistory = Array.isArray(this.game.round_history)
-      ? this.game.round_history as unknown as LastRoundReveal[]
-      : [];
-    // Games created before round_history was introduced still expose their
-    // available last result instead of appearing to have no completed rounds.
-    const roundHistory = storedHistory.length > 0 ? storedHistory : (lastRoundReveal ? [lastRoundReveal] : []);
+    // Disabled multiplayer-only status logic. party_games does not currently
+    // have these fields, and Party mode has no equivalent local state.
+    // const storedHistory = Array.isArray(this.game.round_history)
+    //   ? this.game.round_history as unknown as LastRoundReveal[]
+    //   : [];
+    // const roundHistory = storedHistory.length > 0
+    //   ? storedHistory
+    //   : (lastRoundReveal ? [lastRoundReveal] : []);
     return {
       gameId: this.game.id,
       status: this.game.status as GameStatusResponse['status'],
       hostId: players[0]?.id ?? null,
-      currentArtifact: this.game.artifact_image_url ? { imageUrl: this.game.artifact_image_url } : null,
+      // Party games do not yet store the multiplayer artifact-image or
+      // round-history fields. Keep those features disabled until the party
+      // schema and game flow support them.
+      // currentArtifact: this.game.artifact_image_url
+      //   ? { imageUrl: this.game.artifact_image_url }
+      //   : null,
+      currentArtifact: null,
       players: players.map((player) => ({
-        id: player.id, name: player.name, health: player.health,
-        isEliminated: player.is_eliminated,
-        hasGuessedThisRound: guessedIds.has(player.id),
+        // Disabled multiplayer-only player properties:
+        // id: player.id, name: player.name, health: player.health,
+        // isEliminated: player.is_eliminated,
+        // hasGuessedThisRound: guessedIds.has(player.id),
+        id: player.id,
+        name: player.name ?? 'Unknown player',
       }))
     };
   }

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import styles from './Multiplayer.module.css';
 import archelogists from '../assets/archeologists.png';
 
@@ -12,9 +13,9 @@ function Multiplayer({ setCurrentView }) {
             <p className={styles.tagline}>CHOOSE YOUR GAME MODE!</p>
     
             <div className={styles.button_container}>
-                <button className={styles.start_button}>
+                <Link href="/battle-royale" className={styles.start_button}>
                     COMPETITIVE
-                </button>
+                </Link>
                 <button  onClick={() => setCurrentView('party')} className={styles.start_button}>
                     PARTY
                 </button>

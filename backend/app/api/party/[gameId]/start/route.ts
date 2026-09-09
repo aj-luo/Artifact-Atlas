@@ -32,3 +32,8 @@
 //     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
 //   }
 // }
+
+// This route is intentionally disabled while Party-mode start logic is
+// incomplete. Exporting an empty module keeps Next's route type validator
+// from attempting to import a script file.
+export {};

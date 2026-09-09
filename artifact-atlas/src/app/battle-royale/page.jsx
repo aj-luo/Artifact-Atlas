@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { notifications } from '@mantine/notifications';
 import './battleRoyale.css';
 import logo from '../../assets/AA_logo.png';
+import multiplayer from '../../assets/multiplayer.png';
 
 export default function BattleRoyaleLobby() {
   const router = useRouter();
@@ -12,6 +13,7 @@ export default function BattleRoyaleLobby() {
   const [maxRounds, setMaxRounds] = useState(10);
   const [maxHealth, setMaxHealth] = useState(10000);
   const [joinGameId, setJoinGameId] = useState('');
+  const [lobbyAction, setLobbyAction] = useState('create');
   const [isCreating, setIsCreating] = useState(false);
   const [isChecking, setIsChecking] = useState(false);
   const [error, setError] = useState(null);
@@ -77,57 +79,85 @@ export default function BattleRoyaleLobby() {
 
       <div className="br-container">
         {error && <div className="br-error">{error}</div>}
-        
-        <div className="br-card">
-          <h2>Create a Game</h2>
-          <p>Host a new game and invite your friends.</p>
-          
-          <div className="br-input-group">
-            <label>Rounds: <span>{maxRounds}</span></label>
-            <input type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
-            <small>Number of artifacts to guess (5–20).</small>
+        <div className="br-home-layout">
+          <div className="br-home-artwork" aria-hidden="true">
+            <img src={multiplayer.src} alt="" />
           </div>
 
-          <div className="br-input-group">
-            <label>Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
-            <input type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
-            <small>Each player's starting health (5,000–20,000).</small>
-          </div>
+          <div className="br-home-controls">
+            <div className="br-action-toggle" role="tablist" aria-label="Game action">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={lobbyAction === 'create'}
+                className={lobbyAction === 'create' ? 'is-active' : ''}
+                onClick={() => setLobbyAction('create')}
+              >
+                Create Game
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={lobbyAction === 'join'}
+                className={lobbyAction === 'join' ? 'is-active' : ''}
+                onClick={() => setLobbyAction('join')}
+              >
+                Join Game
+              </button>
+            </div>
 
-          <div className="br-input-group">
-            <label>Countdown Timer: <span>{countdownSeconds}s</span></label>
-            <input type="range" min="5" max="60" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
-            <small>Time allowed after the first guess is made.</small>
+            {lobbyAction === 'create' ? (
+              <div className="br-card">
+                <h2>Create a Game</h2>
+                <p>Host a new game and invite your friends.</p>
+
+                <div className="br-input-group">
+                  <label>Rounds: <span>{maxRounds}</span></label>
+                  <input type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
+                  <small>Number of artifacts to guess (5–20).</small>
+                </div>
+
+                <div className="br-input-group">
+                  <label>Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
+                  <input type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
+                  <small>Each player's starting health (5,000–20,000).</small>
+                </div>
+
+                <div className="br-input-group">
+                  <label>Countdown Timer: <span>{countdownSeconds}s</span></label>
+                  <input type="range" min="5" max="60" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
+                  <small>Time allowed after the first guess is made.</small>
+                </div>
+
+                <button className="br-btn br-btn-primary" onClick={handleCreateGame} disabled={isCreating}>
+                  {isCreating ? 'CREATING...' : 'CREATE NEW GAME'}
+                </button>
+              </div>
+            ) : (
+              <div className="br-card">
+                <h2>Join a Game</h2>
+                <p>Have a game code? Enter it below to join.</p>
+
+                <form onSubmit={handleJoinGame} className="br-join-form">
+                  <input
+                    type="text"
+                    placeholder="Enter Game ID..."
+                    value={joinGameId}
+                    onChange={(e) => setJoinGameId(e.target.value)}
+                    className="br-input"
+                  />
+                  <button type="submit" className="br-btn br-btn-secondary" disabled={!joinGameId.trim() || isChecking}>
+                    {isChecking ? 'CHECKING...' : 'JOIN GAME'}
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
-          
-          <button 
-            className="br-btn br-btn-primary" 
-            onClick={handleCreateGame}
-            disabled={isCreating}
-          >
-            {isCreating ? 'CREATING...' : 'CREATE NEW GAME'}
-          </button>
         </div>
 
-        <div className="br-divider"><span>OR</span></div>
-
-        <div className="br-card">
-          <h2>Join a Game</h2>
-          <p>Have a game code? Enter it below to join.</p>
-          
-          <form onSubmit={handleJoinGame} className="br-join-form">
-            <input 
-              type="text" 
-              placeholder="Enter Game ID..." 
-              value={joinGameId}
-              onChange={(e) => setJoinGameId(e.target.value)}
-              className="br-input"
-            />
-            <button type="submit" className="br-btn br-btn-secondary" disabled={!joinGameId.trim() || isChecking}>
-              {isChecking ? 'CHECKING...' : 'JOIN GAME'}
-            </button>
-          </form>
-        </div>
+        <button className="br-btn br-btn-secondary" onClick={() => router.push('/')}>
+          HOME
+        </button>
       </div>
     </div>
   );
