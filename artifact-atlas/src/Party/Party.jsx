@@ -1,7 +1,7 @@
 import styles from './Party.module.css';
 import partiers from '../assets/party_archeologists.png';
 
-function Party() {
+function Party({ setCurrentView }) {
     return (
         <div className={styles.home}>
             <p className={styles.tagline}>WELCOME TO PARTY MODE!</p>
@@ -10,7 +10,10 @@ function Party() {
     
             {/* Main actions container */}
             <div className={styles.actionContainer}>
-                <button className={styles.start_button}>
+                <button className={styles.start_button} onClick={() => setCurrentView('multiplayer')}>
+                    BACK
+                </button>
+                <button className={styles.start_button} onClick={() => setCurrentView('partylobby')}>
                     CREATE LOBBY
                 </button>
                 

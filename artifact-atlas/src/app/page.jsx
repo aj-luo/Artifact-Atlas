@@ -11,6 +11,7 @@ import home from '../assets/home_icon.png'
 import Masterpage from '../Masterpage/Masterpage.jsx'
 import Multiplayer from '../Multiplayer/Multiplayer.jsx'
 import Party from '../Party/Party.jsx'
+import PartyLobby from '../PartyLobby/PartyLobby.jsx'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +32,8 @@ export default function Home() {
         return <Multiplayer setCurrentView={setCurrentView}/>;
       case 'party':
         return <Party setCurrentView={setCurrentView}/>;
+      case 'partylobby':
+        return <PartyLobby setCurrentView={setCurrentView}/>;
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }
