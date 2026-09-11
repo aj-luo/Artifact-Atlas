@@ -41,7 +41,7 @@ export default function BattleRoyaleLobby() {
 
   const showInvalidGameId = () => {
     notifications.show({
-      color: 'red',
+      color: 'gray',
       message: 'Invalid Game ID',
       withCloseButton: true,
     });
