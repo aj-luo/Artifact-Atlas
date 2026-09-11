@@ -3,7 +3,7 @@ import RangeToggle from '../RangeToggle/RangeToggle';
 import styles from './PartyLobby.module.css';
 import { useState } from 'react';
 
-function PartyLobby({ setCurrentView }) {
+function PartyLobby({ setCurrentView, setGameId }) {
     //These are the default values for time limit and player count. They can be changed by the user using the toggles below. hooks can be used to store the values and update them when the user changes them. The values can then be passed to the backend when creating the lobby.
     const [playerCount, setPlayerCount] = useState(4);
     const [timeLimit, setTimeLimit] = useState(5);
@@ -32,8 +32,11 @@ function PartyLobby({ setCurrentView }) {
             const data = await response.json();
             console.log('Lobby Created successfully with ID:', data.gameId);
 
+            //useState to save the gameId
+            setGameId(data.gameId);
+
             // Optional: Store data.gameId in state or context here before transitioning
-            setCurrentView('lobby'); // or wherever players wait in lobby
+            setCurrentView('partywaitingroom'); // or wherever players wait in lobby
         } catch (error) {
             console.error('Error creating lobby:', error);
             alert('Could not create lobby. Please try again.');
@@ -55,8 +58,8 @@ function PartyLobby({ setCurrentView }) {
                 <button className={styles.start_button} onClick={() => setCurrentView('party')}>
                     BACK
                 </button>
-                <button className={styles.start_button}>
-                    CREATE
+                <button className={styles.start_button} onClick={handleCreateLobby} disabled={isCreating}>
+                    {isCreating ? 'Creating...' : 'CREATE'}
                 </button>
             </div>
         </div>

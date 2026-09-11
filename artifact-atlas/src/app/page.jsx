@@ -12,12 +12,16 @@ import Masterpage from '../Masterpage/Masterpage.jsx'
 import Multiplayer from '../Multiplayer/Multiplayer.jsx'
 import Party from '../Party/Party.jsx'
 import PartyLobby from '../PartyLobby/PartyLobby.jsx'
+import PartyWaitingRoom from '../PartyWaitingRoom/PartyWaitingRoom.jsx'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
 
   //this is a usestate hook to get the current page, this can be home, game, multiplayer, singleplayer etc. 
   const [currentView, setCurrentView] = useState('masterpage');
+
+  // this tracks the gameId for the current game session 
+  const [gameId, setGameId] = useState(null);
 
   //helper mapping state names to components
   const renderView = () => {
@@ -33,7 +37,9 @@ export default function Home() {
       case 'party':
         return <Party setCurrentView={setCurrentView}/>;
       case 'partylobby':
-        return <PartyLobby setCurrentView={setCurrentView}/>;
+        return <PartyLobby setCurrentView={setCurrentView} setGameId={setGameId}/>;
+      case 'partywaitingroom':
+        return <PartyWaitingRoom setCurrentView={setCurrentView} gameId={gameId}/>;
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }
