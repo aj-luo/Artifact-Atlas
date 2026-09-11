@@ -361,7 +361,7 @@ export default function BattleRoyaleRoom() {
           ? playerId === gameState.hostId
             ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', width: '100%', maxWidth: '300px' }}>
-                {startError && <p style={{ color: '#ff416c', fontSize: '0.85rem', margin: 0 }}>{startError}</p>}
+                {startError && <p className="br-start-error">{startError}</p>}
                 <button className="br-btn br-btn-primary" onClick={handleStart} disabled={isStarting}>
                   {isStarting ? 'STARTING…' : 'START GAME'}
                 </button>
@@ -390,7 +390,7 @@ export default function BattleRoyaleRoom() {
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
           <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
           {timeRemaining !== null && (
-            <div className={`br-timer ${timeRemaining <= 5 ? 'urgent' : ''}`}>{timeRemaining}s</div>
+            <div className={`br-timer ${timeRemaining < 10 ? 'urgent' : ''}`}>{timeRemaining}s</div>
           )}
         </div>
 
