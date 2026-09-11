@@ -78,7 +78,9 @@ export default function Home() {
         <div className='column1'>
         </div>
         <div className='column2'>
-          {renderView()}
+          <div key={currentView} className='view-container'>
+            {renderView()}
+          </div>
         </div>
         <div className='column3'>
         </div>
