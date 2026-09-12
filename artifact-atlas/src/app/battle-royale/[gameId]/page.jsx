@@ -8,7 +8,7 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
-import { estimateServerClockOffset, getIntermissionPhase, shouldApplyRevision } from './snapshotSync.js';
+import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRevision } from './snapshotSync.js';
 import '../battleRoyale.css';
 
 countries.registerLocale(enLocale);
@@ -209,19 +209,20 @@ export default function BattleRoyaleRoom() {
       setTimeRemaining(null);
       return;
     }
-    const interval = setInterval(() => {
+    let lastExpiryRequest = -Infinity;
+    const updateTimer = () => {
       const serverNow = Date.now() + serverClockOffsetRef.current;
-      const diff = Math.max(0, Math.ceil((new Date(gameState.roundEndsAt).getTime() - serverNow) / 1000));
+      const diff = getRoundTimeRemaining(gameState.roundStartsAt, gameState.roundEndsAt, serverNow);
       setTimeRemaining(diff);
-      if (diff === 0) {
-        clearInterval(interval);
-        // Poke the backend immediately so resolveRoundIfNeeded() runs within ~200ms
-        // of actual expiry rather than waiting for the next poll cycle (up to 2s).
+      if (diff === 0 && Date.now() - lastExpiryRequest >= 2000) {
+        lastExpiryRequest = Date.now();
         void fetchStatus();
       }
-    }, 200);
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 200);
     return () => clearInterval(interval);
-  }, [gameState?.roundEndsAt, gameState?.status, fetchStatus]);
+  }, [gameState?.roundStartsAt, gameState?.roundEndsAt, gameState?.status, fetchStatus]);
 
   useEffect(() => {
     const updateIntermission = () => {
@@ -287,6 +288,10 @@ export default function BattleRoyaleRoom() {
 
   const submitGuess = async () => {
     if (!playerId || !selectedCountry) return;
+    const serverNow = Date.now() + serverClockOffsetRef.current;
+    if (gameState?.status !== 'active' ||
+        getIntermissionPhase(gameState.roundStartsAt, serverNow).phase !== 'none' ||
+        getRoundTimeRemaining(gameState.roundStartsAt, gameState.roundEndsAt, serverNow) === 0) return;
     const alpha3 = countries.alpha2ToAlpha3(selectedCountry);
     if (!alpha3) return;
     setIsSubmitting(true);
@@ -389,7 +394,7 @@ export default function BattleRoyaleRoom() {
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
           <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
-          {timeRemaining !== null && (
+          {!isIntermission && timeRemaining !== null && (
             <div className={`br-timer ${timeRemaining < 10 ? 'urgent' : ''}`}>{timeRemaining}s</div>
           )}
         </div>
@@ -415,6 +420,8 @@ export default function BattleRoyaleRoom() {
           <div className="br-controls-pane" inert={isIntermission}>
             {me?.isEliminated ? (
               <div className="br-eliminated">You were eliminated. Spectating…</div>
+            ) : !isIntermission && timeRemaining === 0 ? (
+              <div className="br-waiting">Time’s up — loading results…</div>
             ) : me?.hasGuessedThisRound ? (
               <div className="br-waiting">Guess submitted — waiting for others…</div>
             ) : (
@@ -441,7 +448,7 @@ export default function BattleRoyaleRoom() {
                 <button
                   className="br-btn br-btn-primary"
                   onClick={submitGuess}
-                  disabled={isSubmitting || !selectedCountry}
+                  disabled={isSubmitting || !selectedCountry || isIntermission || timeRemaining === 0}
                 >
                   {isSubmitting ? 'SUBMITTING…' : 'SUBMIT GUESS'}
                 </button>

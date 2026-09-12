@@ -12,7 +12,10 @@ import { db } from '@/lib/db';
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    const countdownSeconds = typeof body.countdownSeconds === 'number' ? body.countdownSeconds : 20;
+    const countdownSeconds = body.countdownSeconds === undefined ? 60 : body.countdownSeconds;
+    if (!Number.isInteger(countdownSeconds) || countdownSeconds < 30 || countdownSeconds > 120) {
+      return NextResponse.json({ error: 'Round duration must be an integer between 30 and 120 seconds' }, { status: 400 });
+    }
     const maxRounds        = typeof body.maxRounds        === 'number' ? Math.min(Math.max(body.maxRounds, 5), 20)        : 10;
     const maxHealth        = typeof body.maxHealth        === 'number' ? Math.min(Math.max(body.maxHealth, 5000), 20000)  : 25000;
 

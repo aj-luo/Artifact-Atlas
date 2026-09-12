@@ -9,7 +9,7 @@ import multiplayer from '../../assets/multiplayer.png';
 
 export default function BattleRoyaleLobby() {
   const router = useRouter();
-  const [countdownSeconds, setCountdownSeconds] = useState(20);
+  const [countdownSeconds, setCountdownSeconds] = useState(60);
   const [maxRounds, setMaxRounds] = useState(10);
   const [maxHealth, setMaxHealth] = useState(10000);
   const [joinGameId, setJoinGameId] = useState('');
@@ -124,9 +124,9 @@ export default function BattleRoyaleLobby() {
                 </div>
 
                 <div className="br-input-group">
-                  <label>Countdown Timer: <span>{countdownSeconds}s</span></label>
-                  <input type="range" min="5" max="60" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
-                  <small>Time allowed after the first guess is made.</small>
+                  <label>Round duration: <span>{countdownSeconds}s</span></label>
+                  <input type="range" min="30" max="120" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
+                  <small>Everyone has this long to guess from the start of each round.</small>
                 </div>
 
                 <button className="br-btn br-btn-primary" onClick={handleCreateGame} disabled={isCreating}>

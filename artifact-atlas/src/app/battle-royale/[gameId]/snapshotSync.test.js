@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateServerClockOffset, getIntermissionPhase, shouldApplyRevision } from './snapshotSync.js';
+import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRevision } from './snapshotSync.js';
 
 test('an older HTTP snapshot cannot overwrite a newer broadcast', () => {
   assert.equal(shouldApplyRevision(8, 7), false);
@@ -25,4 +25,19 @@ test('clock offset uses the request midpoint to tolerate network latency', () =>
   const receivedAt = requestedAt + 200;
   const serverTime = new Date(requestedAt + 5100).toISOString();
   assert.equal(estimateServerClockOffset(serverTime, requestedAt, receivedAt), 5000);
+});
+
+test('guessing windows begin after intermission and expire at the shared deadline', () => {
+  const start = Date.parse('2026-09-12T12:00:20.000Z');
+  for (const duration of [30, 60, 120]) {
+    const startsAt = new Date(start).toISOString();
+    const endsAt = new Date(start + duration * 1000).toISOString();
+    assert.equal(getRoundTimeRemaining(startsAt, endsAt, start - 1), null);
+    assert.equal(getRoundTimeRemaining(startsAt, endsAt, start), duration);
+    assert.equal(getRoundTimeRemaining(startsAt, endsAt, start + 1000), duration - 1);
+    assert.equal(getRoundTimeRemaining(startsAt, endsAt, start + duration * 1000 - 1), 1);
+    assert.equal(getRoundTimeRemaining(startsAt, endsAt, start + duration * 1000), 0);
+    assert.equal(getRoundTimeRemaining(startsAt, endsAt, start + duration * 1000 + 5000), 0);
+  }
+  assert.equal(getRoundTimeRemaining(null, null, start), null);
 });

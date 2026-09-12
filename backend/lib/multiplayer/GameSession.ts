@@ -84,6 +84,24 @@ async function databaseNow(tx: Transaction): Promise<Date> {
   return rows[0].now;
 }
 
+function roundDuration(seconds: number): number {
+  return Math.min(120, Math.max(30, seconds));
+}
+
+async function initializeRoundWindow(tx: Transaction, game: multiplayer_games, now: Date): Promise<multiplayer_games> {
+  if (game.status !== 'active' || game.round_ends_at) return game;
+  const startsAt = new Date(Math.max(now.getTime(), game.round_starts_at?.getTime() ?? 0));
+  return tx.multiplayer_games.update({
+    where: { id: game.id },
+    data: {
+      countdown_seconds: roundDuration(game.countdown_seconds),
+      round_starts_at: startsAt,
+      round_ends_at: new Date(startsAt.getTime() + roundDuration(game.countdown_seconds) * 1000),
+      revision: { increment: 1 },
+    },
+  });
+}
+
 export class GameSession {
   private constructor(
     private game: multiplayer_games,
@@ -153,6 +171,9 @@ export class GameSession {
       const playerCount = await tx.multiplayer_players.count({ where: { game_id: game.id } });
       if (playerCount < 2) throw new GameSessionError('Need at least 2 players to start', 400);
 
+      const now = await databaseNow(tx);
+      const duration = roundDuration(game.countdown_seconds);
+
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
@@ -160,7 +181,9 @@ export class GameSession {
           object_id: artifact.objectId, artifact_iso3: artifact.iso3,
           artifact_begin_year: artifact.beginYear, artifact_end_year: artifact.endYear,
           artifact_image_url: artifact.imageUrl, artifact_title: artifact.title,
-          round_ends_at: null, round_starts_at: null, revision: { increment: 1 },
+          countdown_seconds: duration,
+          round_ends_at: new Date(now.getTime() + duration * 1000),
+          round_starts_at: now, revision: { increment: 1 },
         },
       });
     });
@@ -184,7 +207,7 @@ export class GameSession {
     const nextArtifact = likelyToResolve ? await pickRandomArtifact() : null;
 
     const result = await db.$transaction(async (tx) => {
-      const game = await lockGame(tx, this.game.id);
+      let game = await lockGame(tx, this.game.id);
       if (!game) throw new GameSessionError('Game not found', 404);
       if (game.status !== 'active') {
         throw new GameSessionError(`Game is not active (status: ${game.status})`, 409);
@@ -197,6 +220,7 @@ export class GameSession {
       }
 
       const now = await databaseNow(tx);
+      game = await initializeRoundWindow(tx, game, now);
       if (game.round_starts_at && now < game.round_starts_at) {
         throw new GameSessionError('The next round has not started yet', 409);
       }
@@ -218,11 +242,6 @@ export class GameSession {
       });
       if (alreadyGuessed) throw new GameSessionError('Already submitted a guess this round', 409);
 
-      const startsTimer = game.round_ends_at === null;
-      const roundEndsAt = startsTimer
-        ? new Date(now.getTime() + game.countdown_seconds * 1000)
-        : game.round_ends_at;
-
       await tx.multiplayer_guesses.create({
         data: {
           game_id: game.id, player_id: playerId, round_number: game.current_round,
@@ -235,8 +254,7 @@ export class GameSession {
       const updatedGame = await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
-          round_ends_at: roundEndsAt,
-          revision: { increment: startsTimer ? 2 : 1 },
+          revision: { increment: 1 },
         },
       });
       const roundResolved = await this.resolveLocked(tx, updatedGame, now, nextArtifact);
@@ -252,10 +270,20 @@ export class GameSession {
 
   async resolveRoundIfNeeded(): Promise<boolean> {
     if (this.game.status !== 'active') return false;
-    const activePlayerCount = this.players.filter((player) => !player.is_eliminated).length;
+    let initialized = false;
+    if (!this.game.round_ends_at) {
+      initialized = await db.$transaction(async (tx) => {
+        const game = await lockGame(tx, this.game.id);
+        if (!game || game.status !== 'active' || game.round_ends_at) return false;
+        await initializeRoundWindow(tx, game, await databaseNow(tx));
+        return true;
+      });
+      await this.refresh();
+    }
     const timerExpired = this.game.round_ends_at !== null && new Date() >= this.game.round_ends_at;
-    const allGuessed = this.roundGuesses.length >= activePlayerCount;
-    if (!timerExpired && !allGuessed) return false;
+    const allGuessed = this.players.filter((player) => !player.is_eliminated)
+      .every((player) => this.roundGuesses.some((guess) => guess.player_id === player.id));
+    if (!timerExpired && !allGuessed) return initialized;
 
     const nextArtifact = await pickRandomArtifact();
     const resolved = await db.$transaction(async (tx) => {
@@ -264,7 +292,7 @@ export class GameSession {
       return this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact);
     });
     if (resolved) await this.refresh();
-    return resolved;
+    return resolved || initialized;
   }
 
   private async resolveLocked(
@@ -282,7 +310,7 @@ export class GameSession {
     ]);
     const activePlayers = players.filter((player) => !player.is_eliminated);
     const timerExpired = game.round_ends_at !== null && now >= game.round_ends_at;
-    const allGuessed = guesses.length >= activePlayers.length;
+    const allGuessed = activePlayers.every((player) => guesses.some((guess) => guess.player_id === player.id));
     if (!timerExpired && !allGuessed) return false;
 
     // A concurrent guess can make a request that looked non-final become final
@@ -363,7 +391,8 @@ export class GameSession {
           object_id: nextArtifact!.objectId, artifact_iso3: nextArtifact!.iso3,
           artifact_begin_year: nextArtifact!.beginYear, artifact_end_year: nextArtifact!.endYear,
           artifact_image_url: nextArtifact!.imageUrl, artifact_title: nextArtifact!.title,
-          round_ends_at: null,
+          countdown_seconds: roundDuration(game.countdown_seconds),
+          round_ends_at: new Date(now.getTime() + 20_000 + roundDuration(game.countdown_seconds) * 1000),
           round_starts_at: new Date(now.getTime() + 20_000),
           last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
           round_history: roundHistory,
