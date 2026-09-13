@@ -10,7 +10,7 @@ type Params = { params: Promise<{ gameId: string }> };
  * Body: { playerId: string, country: string (ISO alpha-3), year: number }
  *
  * Submits a guess for the current round:
- * - Starts the 20s round timer on the first guess.
+ * - Preserves the shared deadline established when the round starts.
  * - Calculates the geographic + temporal score.
  * - Resolves the round immediately if all active players have now guessed
  *   or the timer has already expired.
