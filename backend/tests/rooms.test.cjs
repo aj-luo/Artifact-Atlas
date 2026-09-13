@@ -54,6 +54,7 @@ test('stale concurrent guess views recover without double finalization', async (
     const host = await s.joinRoom(room.id, 'Host', '');
     await s.joinRoom(room.id, 'Guest', '');
     const state = await s.transitionRoom(room.id, 'start', host.credential, null);
+    await openRound(db, state.currentSessionId);
     // Both requests load before either commits, so neither prefetches an artifact.
     const first = await s.GameSession.load(state.currentSessionId);
     const second = await s.GameSession.load(state.currentSessionId);
@@ -245,6 +246,7 @@ test('failed finalization rolls back damage, placements, and the final guess; re
     await s.joinRoom(room.id, 'Joint second B', '');
     const state = await s.transitionRoom(room.id, 'start', host.credential, null);
     const sessionId = state.currentSessionId;
+    await openRound(db, sessionId);
     await (await s.GameSession.load(sessionId)).submitGuess(state.players[0].id, 'USA', 1000, 1);
     await (await s.GameSession.load(sessionId)).submitGuess(state.players[1].id, 'USA', 0, 1);
     const originalTransaction = db.$transaction;
@@ -267,5 +269,78 @@ test('failed finalization rolls back damage, placements, and the final guess; re
     const stats = await s.memberStatistics(room.id);
     assert.deepEqual(stats.map(m => m.secondPlaces), [0, 1, 1]);
     assert.ok(stats.every(m => m.sessionsPlayed === 1));
+  } finally { await pg.close(); }
+});
+
+async function openRound(db, id) {
+  await db.multiplayer_games.update({ where: { id }, data: {
+    round_starts_at: new Date(Date.now() - 1000), round_ends_at: new Date(Date.now() + 60000),
+  } });
+}
+
+test('shared starts, early reveals, deadlines, and rematches use database time', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 2, countdown_seconds: 30 } });
+    const host = await s.joinRoom(room.id, 'Host', '');
+    await s.joinRoom(room.id, 'Guest', '');
+    let state = await s.transitionRoom(room.id, 'start', host.credential, null);
+    const id = state.currentSessionId;
+    function checkStart(snapshot) {
+      const lead = Date.parse(snapshot.roundStartsAt) - Date.parse(snapshot.serverTime);
+      assert.ok(lead > 4500 && lead <= 5000);
+      assert.equal(Date.parse(snapshot.roundEndsAt) - Date.parse(snapshot.roundStartsAt), 30000);
+      assert.equal(snapshot.resultsRevealAt, null);
+    }
+    checkStart(state);
+    await rejected((await s.GameSession.load(id)).submitGuess(state.players[0].id, 'USA', 100, 1), 409);
+    await openRound(db, id);
+    for (const player of state.players) await (await s.GameSession.load(id)).submitGuess(player.id, 'USA', 100, 1);
+    state = await s.roomSnapshot(room.id);
+    assert.equal(state.currentRound, 2);
+    assert.equal(state.roundHistory.length, 1);
+    assert.equal(Date.parse(state.roundStartsAt) - Date.parse(state.resultsRevealAt), 20000);
+    assert.equal(Date.parse(state.roundEndsAt) - Date.parse(state.roundStartsAt), 30000);
+    assert.ok(Date.parse(state.resultsRevealAt) > Date.parse(state.serverTime));
+    await rejected((await s.GameSession.load(id)).submitGuess(state.players[0].id, 'USA', 100, 2), 409);
+    await openRound(db, id);
+    await (await s.GameSession.load(id)).submitGuess(state.players[0].id, 'USA', 100, 2);
+    await db.multiplayer_games.update({ where: { id }, data: { round_ends_at: new Date(0) } });
+    // A skewed application clock must not suppress database deadline resolution.
+    const RealDate = Date;
+    global.Date = class extends RealDate { constructor(...args) { super(...(args.length ? args : [0])); } };
+    try { await s.roomStatus(room.id); } finally { global.Date = RealDate; }
+    await rejected((await s.GameSession.load(id)).submitGuess(state.players[1].id, 'USA', 100, 2), 409);
+    state = await s.roomSnapshot(room.id);
+    assert.equal(state.status, 'finished');
+    assert.equal(state.roundHistory.length, 2);
+    assert.deepEqual(state.players.map(p => p.cumulativeScore), [200, 100]);
+    const recovered = await s.roomStatus(room.id);
+    assert.deepEqual(recovered.players, state.players);
+    assert.equal(recovered.resultsRevealAt, state.resultsRevealAt);
+    state = await s.transitionRoom(room.id, 'reopen', host.credential, id);
+    assert.equal(state.resultsRevealAt, null);
+    checkStart(await s.transitionRoom(room.id, 'start', host.credential, id));
+  } finally { await pg.close(); }
+});
+
+test('concurrent final submissions apply damage and history exactly once', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 1 } });
+    const host = await s.joinRoom(room.id, 'Host', '');
+    await s.joinRoom(room.id, 'Guest', '');
+    const state = await s.transitionRoom(room.id, 'start', host.credential, null);
+    await openRound(db, state.currentSessionId);
+    const sessions = await Promise.all(state.players.map(() => s.GameSession.load(state.currentSessionId)));
+    await Promise.all(sessions.map((session, i) => session.submitGuess(state.players[i].id, 'USA', i ? 50 : 100, 1, false)));
+    const finished = await s.roomStatus(room.id);
+    assert.equal(finished.status, 'finished');
+    assert.equal(finished.roundHistory.length, 1);
+    assert.deepEqual(finished.players.map(p => [p.health, p.cumulativeScore]), [[1000, 100], [950, 50]]);
+    assert.equal(await db.multiplayer_guesses.count({ where: { game_id: state.currentSessionId } }), 2);
+    assert.equal((await s.roomStatus(room.id)).resultsRevealAt, finished.resultsRevealAt);
   } finally { await pg.close(); }
 });

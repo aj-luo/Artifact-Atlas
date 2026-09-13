@@ -88,7 +88,7 @@ async function lockGame(tx: Transaction, gameId: string): Promise<multiplayer_ga
   return rows[0] ?? null;
 }
 
-async function databaseNow(tx: Transaction): Promise<Date> {
+export async function databaseNow(tx: Transaction): Promise<Date> {
   const rows = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
   return rows[0].now;
 }
@@ -116,6 +116,7 @@ export class GameSession {
     private game: multiplayer_games,
     private players: multiplayer_players[],
     private roundGuesses: multiplayer_guesses[],
+    private serverTime: Date,
   ) {}
 
   static async load(gameId: string, client: Transaction = db): Promise<GameSession | null> {
@@ -128,7 +129,7 @@ export class GameSession {
         where: { game_id: gameId, round_number: game.current_round },
       }),
     ]);
-    return new GameSession(game, players, roundGuesses);
+    return new GameSession(game, players, roundGuesses, await databaseNow(client));
   }
 
   private async refresh(): Promise<void> {
@@ -137,6 +138,7 @@ export class GameSession {
     this.game = updated.game;
     this.players = updated.players;
     this.roundGuesses = updated.roundGuesses;
+    this.serverTime = updated.serverTime;
   }
 
   async submitGuess(playerId: string, country: string, year: number, expectedRound: number, refresh = true): Promise<GuessResult> {
@@ -231,7 +233,7 @@ export class GameSession {
       });
       await this.refresh();
     }
-    const timerExpired = this.game.round_ends_at !== null && new Date() >= this.game.round_ends_at;
+    const timerExpired = this.game.round_ends_at !== null && (await databaseNow(db)) >= this.game.round_ends_at;
     const allGuessed = this.players.filter((player) => !player.is_eliminated)
       .every((player) => this.roundGuesses.some((guess) => guess.player_id === player.id));
     if (!timerExpired && !allGuessed) return initialized;
@@ -254,7 +256,7 @@ export class GameSession {
     now: Date,
     nextArtifact: SelectedArtifact | null,
   ): Promise<boolean> {
-    if (game.status !== 'active') return false;
+    if (game.status !== 'active' || (game.round_starts_at && now < game.round_starts_at)) return false;
     const [guesses, players] = await Promise.all([
       tx.multiplayer_guesses.findMany({
         where: { game_id: game.id, round_number: game.current_round },
@@ -329,6 +331,7 @@ export class GameSession {
     const existingHistory = Array.isArray(game.round_history) ? game.round_history : [];
     const roundHistory = [...existingHistory, reveal].slice(-20) as Prisma.InputJsonValue;
 
+    const revealAt = new Date((await databaseNow(tx)).getTime() + 1000);
     if (gameOver) {
       for (const player of rankPlayers(updatedPlayers)) {
         await tx.multiplayer_players.update({ where: { id: player.id },
@@ -338,7 +341,7 @@ export class GameSession {
         where: { id: game.id },
         data: {
           status: 'finished', completed_at: now,
-          results_reveal_at: new Date((await databaseNow(tx)).getTime() + 1000),
+          results_reveal_at: revealAt,
           last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
           round_history: roundHistory,
           round_starts_at: null,
@@ -350,12 +353,13 @@ export class GameSession {
         where: { id: game.id },
         data: {
           current_round: game.current_round + 1,
+          results_reveal_at: revealAt,
           object_id: nextArtifact!.objectId, artifact_iso3: nextArtifact!.iso3,
           artifact_begin_year: nextArtifact!.beginYear, artifact_end_year: nextArtifact!.endYear,
           artifact_image_url: nextArtifact!.imageUrl, artifact_title: nextArtifact!.title,
           countdown_seconds: roundDuration(game.countdown_seconds),
-          round_ends_at: new Date(now.getTime() + 20_000 + roundDuration(game.countdown_seconds) * 1000),
-          round_starts_at: new Date(now.getTime() + 20_000),
+          round_ends_at: new Date(revealAt.getTime() + 20_000 + roundDuration(game.countdown_seconds) * 1000),
+          round_starts_at: new Date(revealAt.getTime() + 20_000),
           last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
           round_history: roundHistory,
           revision: { increment: 2 },
@@ -378,7 +382,7 @@ export class GameSession {
     return {
       gameId: this.game.id,
       revision: this.game.revision,
-      serverTime: new Date().toISOString(),
+      serverTime: this.serverTime.toISOString(),
       status: this.game.status as GameStatusResponse['status'],
       currentRound: this.game.current_round,
       maxRounds: this.game.max_rounds,

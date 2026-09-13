@@ -3,7 +3,7 @@ export function shouldApplyRevision(latestRevision, incomingRevision) {
 }
 
 export function isResultsRevealPending(snapshot, serverNow) {
-  return snapshot?.status === 'finished' && !!snapshot.resultsRevealAt
+  return (snapshot?.status === 'finished' || snapshot?.status === 'active') && !!snapshot.resultsRevealAt
     && serverNow < Date.parse(snapshot.resultsRevealAt);
 }
 
@@ -32,4 +32,16 @@ export function getIntermissionPhase(roundStartsAt, serverNow) {
 // Room revisions never reset when a new session starts.
 export function shouldApplyRoomSnapshot(latestRevision, snapshot, roomId) {
   return snapshot?.roomId === roomId && shouldApplyRevision(latestRevision, snapshot.revision);
+}
+
+// Every rendered transition and input guard uses the same calibrated instant.
+export function getRoomPhase(snapshot, serverNow) {
+  const base = { countdown: null, timeRemaining: null, canGuess: false };
+  if (isResultsRevealPending(snapshot, serverNow)) return { ...base, phase: 'syncing', revealPending: true };
+  if (snapshot?.status !== 'active') return { ...base, phase: snapshot?.status ?? 'loading', revealPending: false };
+  const intermission = getIntermissionPhase(snapshot.roundStartsAt, serverNow);
+  if (intermission.phase !== 'none') return { ...base, ...intermission, revealPending: false };
+  const timeRemaining = getRoundTimeRemaining(snapshot.roundStartsAt, snapshot.roundEndsAt, serverNow);
+  return { ...base, phase: timeRemaining === 0 ? 'syncing' : 'playing', timeRemaining,
+    canGuess: timeRemaining !== 0, revealPending: false };
 }

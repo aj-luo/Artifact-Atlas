@@ -2,7 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Prisma, type multiplayer_rooms } from '@prisma/client';
 import { db } from '@/lib/db';
 import { pickRandomArtifact } from '@/lib/artifactSelector';
-import { GameSession, GameSessionError, MAX_PLAYERS } from './GameSession';
+import { GameSession, GameSessionError, MAX_PLAYERS, databaseNow } from './GameSession';
 
 type Tx = Prisma.TransactionClient;
 export const isUuid = (value: unknown): value is string => typeof value === 'string'
@@ -37,13 +37,13 @@ export async function roomSnapshot(roomId: string) {
     const state = session?.getStatus();
     return {
       ...state, roomId, gameId: room.current_session_id, currentSessionId: room.current_session_id,
-      sessionNumber: room.session_count, revision: room.revision, serverTime: new Date().toISOString(),
+      sessionNumber: room.session_count, revision: room.revision, serverTime: (await databaseNow(tx)).toISOString(),
       status: room.status, hostMemberId: room.host_member_id,
       hostId: room.status === 'waiting' ? room.host_member_id : state?.players.find(p => p.memberId === room.host_member_id)?.id ?? null,
       maxRounds: room.max_rounds, maxHealth: room.max_health, countdownSeconds: room.countdown_seconds,
       members: members.map(m => ({ id: m.id, name: m.name })),
       players: room.status === 'waiting' ? members.map(m => ({ id: m.id, memberId: m.id, name: m.name, health: room.max_health, isEliminated: false })) : state?.players ?? [],
-      ...(room.status === 'waiting' ? { currentRound: 0, roundStartsAt: null, roundEndsAt: null, currentArtifact: null, lastRoundReveal: null, roundHistory: [] } : {}),
+      ...(room.status === 'waiting' ? { currentRound: 0, resultsRevealAt: null, roundStartsAt: null, roundEndsAt: null, currentArtifact: null, lastRoundReveal: null, roundHistory: [] } : {}),
     };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
@@ -115,7 +115,7 @@ export async function transitionRoom(roomId: string, action: string, token: stri
         max_health: room.max_health, max_rounds: room.max_rounds, countdown_seconds: room.countdown_seconds,
         object_id: artifact!.objectId, artifact_iso3: artifact!.iso3, artifact_begin_year: artifact!.beginYear,
         artifact_end_year: artifact!.endYear, artifact_image_url: artifact!.imageUrl, artifact_title: artifact!.title,
-        round_starts_at: now, round_ends_at: new Date(now.getTime() + room.countdown_seconds * 1000),
+        round_starts_at: new Date(now.getTime() + 5000), round_ends_at: new Date(now.getTime() + 5000 + room.countdown_seconds * 1000),
         players: { create: members.map(m => ({ member_id: m.id, name: m.name, health: room.max_health, created_at: m.joined_at })) },
       } });
       await tx.multiplayer_rooms.update({ where: { id: roomId }, data: {

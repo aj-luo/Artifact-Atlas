@@ -1,9 +1,8 @@
 Battle royale rooms and sessions
 
 Before deploying the synchronized game-end changes, apply the additive
-`20260914000000_results_reveal` migration and regenerate Prisma. Finished snapshots
-include nullable `resultsRevealAt`, set once at finalization to database time plus
-one second. Clients gate final results on that shared timestamp using their server
+`20260914000000_results_reveal` migration and regenerate Prisma. Every completed round includes nullable `resultsRevealAt`, set once at resolution to database time plus
+one second. Initial rounds and rematches start five seconds ahead; subsequent rounds start 20 seconds after reveal (15 seconds of results and five of countdown). Deadlines are relative to the scheduled start. Snapshots and resolution use database time. Clients gate results, history, statistics, and input through one phase calculation using that shared timestamp and their server
 clock estimate; late arrivals and legacy sessions reveal immediately. Guess
 responses and broadcasts reuse the same consistent snapshot. Concurrent guesses
 that require deferred resolution schedule recovery on the server after response.
