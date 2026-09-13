@@ -4,42 +4,76 @@ import styles from './PartyLobby.module.css';
 import { useState } from 'react';
 
 function PartyLobby({ setCurrentView, setGameId }) {
-    //These are the default values for time limit and player count. They can be changed by the user using the toggles below. hooks can be used to store the values and update them when the user changes them. The values can then be passed to the backend when creating the lobby.
     const [playerCount, setPlayerCount] = useState(4);
     const [timeLimit, setTimeLimit] = useState(5);
-
-    //hook to track whether the lobby is being created or not. We also want to check the status, if it is true then we have a loading gif replace the create button.
+    const [nickname, setNickname] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
+    // Creates the game lobby and returns the new gameId
     const handleCreateLobby = async () => {
-        setIsCreating(true);
+        const response = await fetch('/api/party/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                playerCount: playerCount,
+                countdownMinutes: timeLimit,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to create lobby');
+        }
+
+        const data = await response.json();
+        console.log('Lobby Created successfully with ID:', data.gameId);
+        
+        // Save game ID to parent state
+        setGameId(data.gameId);
+        return data.gameId;
+    };
+
+    // Joins the created game lobby using the passed gameId and nickname
+    const handleCreatePlayer = async (targetGameId, playerNickname) => {
+        const response = await fetch(`/api/party/${targetGameId}/join`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: playerNickname }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to join lobby');
+        }
+
+        const data = await response.json();
+        console.log('Joined Lobby successfully:', data);
+        
+        // Persist local player ID if returned
+        if (data.playerId) {
+            localStorage.setItem('playerId', data.playerId);
+        }
+    };
+
+    // Orchestrates sequential creation and navigation
+    const handleStart = async () => {
+        if (!nickname.trim()) {
+            alert('Please enter a nickname before creating a room.');
+            return;
+        }
+
         try {
-            const response = await fetch('/api/party/create', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    playerCount: playerCount,
-                    countdownMinutes: timeLimit,
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to create lobby');
-            }
-
-            const data = await response.json();
-            console.log('Lobby Created successfully with ID:', data.gameId);
-
-            //useState to save the gameId
-            setGameId(data.gameId);
-
-            // Optional: Store data.gameId in state or context here before transitioning
-            setCurrentView('partywaitingroom'); // or wherever players wait in lobby
+            setIsCreating(true);
+            
+            // 1. Create the lobby and extract the new gameId directly
+            const newGameId = await handleCreateLobby();
+            
+            // 2. Join the newly created lobby using the returned gameId
+            await handleCreatePlayer(newGameId, nickname.trim());
+            
+            // 3. Navigate to waiting room on complete success
+            setCurrentView('partywaitingroom');
         } catch (error) {
-            console.error('Error creating lobby:', error);
-            alert('Could not create lobby. Please try again.');
+            console.error('Failed to start party session:', error);
+            alert('Could not set up lobby. Please try again.');
         } finally {
             setIsCreating(false);
         }
@@ -49,16 +83,32 @@ function PartyLobby({ setCurrentView, setGameId }) {
         <div className={styles.home}>
             <p className={styles.tagline}>CREATE A LOBBY</p>
 
-            {/*These are the toggles for player count and time limit */}    
             <RangeToggle value={playerCount} onChange={setPlayerCount} />
             <TimeToggle value={timeLimit} onChange={setTimeLimit} />
+
+            <div className={styles.joinGroup}>
+                <input 
+                    type="text" 
+                    placeholder="Enter Nickname" 
+                    className={styles.lobbyInput} 
+                    value={nickname}
+                    onChange={(e) => setNickname(e.target.value)}
+                />
+            </div>
     
-            {/* Main actions container */}
             <div className={styles.actionContainer}>
-                <button className={styles.start_button} onClick={() => setCurrentView('party')}>
+                <button 
+                    className={styles.start_button} 
+                    onClick={() => setCurrentView('party')}
+                    disabled={isCreating}
+                >
                     BACK
                 </button>
-                <button className={styles.start_button} onClick={handleCreateLobby} disabled={isCreating}>
+                <button 
+                    className={styles.start_button} 
+                    onClick={handleStart} 
+                    disabled={isCreating}
+                >
                     {isCreating ? 'Creating...' : 'CREATE'}
                 </button>
             </div>
