@@ -1,3 +1,4 @@
+import { rankPlayers } from './placements';
 import { db } from '@/lib/db';
 import { pickRandomArtifact, type SelectedArtifact } from '@/lib/artifactSelector';
 import { ScoringModule, type ScoreResult } from './scoring';
@@ -7,6 +8,10 @@ export const MAX_PLAYERS = 20;
 
 export interface PlayerStatus {
   id: string;
+  memberId: string | null;
+  finalPlacement: number | null;
+  cumulativeScore: number;
+  eliminationRound: number | null;
   name: string;
   health: number;
   isEliminated: boolean;
@@ -73,6 +78,9 @@ export class GameSessionError extends Error {
 type Transaction = Prisma.TransactionClient;
 
 async function lockGame(tx: Transaction, gameId: string): Promise<multiplayer_games | null> {
+  // Global lock order: room before session, shared with room transitions.
+  await tx.$queryRaw`SELECT id FROM multiplayer_rooms WHERE id =
+    (SELECT room_id FROM multiplayer_games WHERE id = ${gameId}::uuid) FOR UPDATE`;
   const rows = await tx.$queryRaw<multiplayer_games[]>`
     SELECT * FROM "multiplayer_games" WHERE "id" = ${gameId}::uuid FOR UPDATE
   `;
@@ -109,13 +117,13 @@ export class GameSession {
     private roundGuesses: multiplayer_guesses[],
   ) {}
 
-  static async load(gameId: string): Promise<GameSession | null> {
-    const game = await db.multiplayer_games.findUnique({ where: { id: gameId } });
+  static async load(gameId: string, client: Transaction = db): Promise<GameSession | null> {
+    const game = await client.multiplayer_games.findUnique({ where: { id: gameId } });
     if (!game) return null;
 
     const [players, roundGuesses] = await Promise.all([
-      db.multiplayer_players.findMany({ where: { game_id: gameId } }),
-      db.multiplayer_guesses.findMany({
+      client.multiplayer_players.findMany({ where: { game_id: gameId } }),
+      client.multiplayer_guesses.findMany({
         where: { game_id: gameId, round_number: game.current_round },
       }),
     ]);
@@ -130,67 +138,7 @@ export class GameSession {
     this.roundGuesses = updated.roundGuesses;
   }
 
-  async join(playerName: string): Promise<{ playerId: string }> {
-    const trimmed = playerName.trim();
-    if (!trimmed || trimmed.length > 32) {
-      throw new GameSessionError('Player name must be 1–32 characters');
-    }
-
-    const player = await db.$transaction(async (tx) => {
-      const game = await lockGame(tx, this.game.id);
-      if (!game) throw new GameSessionError('Game not found', 404);
-      if (game.status !== 'waiting') throw new GameSessionError('Game has already started', 409);
-
-      const playerCount = await tx.multiplayer_players.count({ where: { game_id: game.id } });
-      if (playerCount >= MAX_PLAYERS) {
-        throw new GameSessionError(`Room is full (maximum ${MAX_PLAYERS} players)`, 409);
-      }
-
-      const created = await tx.multiplayer_players.create({
-        data: { game_id: game.id, name: trimmed, health: game.max_health },
-      });
-      await tx.multiplayer_games.update({
-        where: { id: game.id },
-        data: { revision: { increment: 1 } },
-      });
-      return created;
-    });
-
-    await this.refresh();
-    return { playerId: player.id };
-  }
-
-  async start(): Promise<void> {
-    const artifact = await pickRandomArtifact();
-    if (!artifact) throw new GameSessionError('Could not find an artifact — try again', 503);
-
-    await db.$transaction(async (tx) => {
-      const game = await lockGame(tx, this.game.id);
-      if (!game) throw new GameSessionError('Game not found', 404);
-      if (game.status !== 'waiting') throw new GameSessionError('Game is not in waiting state', 409);
-      const playerCount = await tx.multiplayer_players.count({ where: { game_id: game.id } });
-      if (playerCount < 2) throw new GameSessionError('Need at least 2 players to start', 400);
-
-      const now = await databaseNow(tx);
-      const duration = roundDuration(game.countdown_seconds);
-
-      await tx.multiplayer_games.update({
-        where: { id: game.id },
-        data: {
-          status: 'active', current_round: 1,
-          object_id: artifact.objectId, artifact_iso3: artifact.iso3,
-          artifact_begin_year: artifact.beginYear, artifact_end_year: artifact.endYear,
-          artifact_image_url: artifact.imageUrl, artifact_title: artifact.title,
-          countdown_seconds: duration,
-          round_ends_at: new Date(now.getTime() + duration * 1000),
-          round_starts_at: now, revision: { increment: 1 },
-        },
-      });
-    });
-    await this.refresh();
-  }
-
-  async submitGuess(playerId: string, country: string, year: number): Promise<GuessResult> {
+  async submitGuess(playerId: string, country: string, year: number, expectedRound: number): Promise<GuessResult> {
     if (!this.game.artifact_iso3 || this.game.artifact_begin_year == null || this.game.artifact_end_year == null) {
       throw new GameSessionError('Game artifact is not set', 500);
     }
@@ -209,6 +157,7 @@ export class GameSession {
     const result = await db.$transaction(async (tx) => {
       let game = await lockGame(tx, this.game.id);
       if (!game) throw new GameSessionError('Game not found', 404);
+      if (game.current_round !== expectedRound) throw new GameSessionError('Round changed', 409);
       if (game.status !== 'active') {
         throw new GameSessionError(`Game is not active (status: ${game.status})`, 409);
       }
@@ -327,7 +276,10 @@ export class GameSession {
       const newHealth = Math.max(0, player.health - (maxScore - (guess?.total_score ?? 0)));
       await tx.multiplayer_players.update({
         where: { id: player.id },
-        data: { health: newHealth, is_eliminated: newHealth <= 0 },
+        data: { health: newHealth, is_eliminated: newHealth <= 0,
+          elimination_round: newHealth <= 0 ? game.current_round : null,
+          cumulative_score: { increment: guess?.total_score ?? 0 },
+        },
       });
       if (!guess) {
         await tx.multiplayer_guesses.create({
@@ -374,10 +326,14 @@ export class GameSession {
     const roundHistory = [...existingHistory, reveal].slice(-20) as Prisma.InputJsonValue;
 
     if (gameOver) {
+      for (const player of rankPlayers(updatedPlayers)) {
+        await tx.multiplayer_players.update({ where: { id: player.id },
+          data: { final_placement: updatedPlayers.some(p => p.is_eliminated && p.elimination_round === null) ? null : player.final_placement, completed_at: now } });
+      }
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
-          status: 'finished', last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
+          status: 'finished', completed_at: now, last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
           round_history: roundHistory,
           round_starts_at: null,
           revision: { increment: 1 },
@@ -427,7 +383,9 @@ export class GameSession {
       roundStartsAt: this.game.round_starts_at?.toISOString() ?? null,
       roundEndsAt: this.game.round_ends_at?.toISOString() ?? null,
       players: players.map((player) => ({
-        id: player.id, name: player.name, health: player.health,
+        id: player.id, memberId: player.member_id, name: player.name, health: player.health,
+        finalPlacement: player.final_placement, cumulativeScore: player.cumulative_score,
+        eliminationRound: player.elimination_round,
         isEliminated: player.is_eliminated,
         hasGuessedThisRound: guessedIds.has(player.id),
       })),
@@ -438,6 +396,11 @@ export class GameSession {
 
   async broadcastState(): Promise<void> {
     try {
+      if (this.game.room_id) {
+        const { broadcastRoom } = await import('./Room');
+        await broadcastRoom(this.game.room_id);
+        return;
+      }
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
       if (!url || !key) throw new Error('Supabase broadcast environment is not configured');

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRevision } from './snapshotSync.js';
+import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
 
 test('an older HTTP snapshot cannot overwrite a newer broadcast', () => {
   assert.equal(shouldApplyRevision(8, 7), false);
@@ -40,4 +40,14 @@ test('guessing windows begin after intermission and expire at the shared deadlin
     assert.equal(getRoundTimeRemaining(startsAt, endsAt, start + duration * 1000 + 5000), 0);
   }
   assert.equal(getRoundTimeRemaining(null, null, start), null);
+});
+
+test('room revisions reject delayed prior-session snapshots and recover after reconnect', () => {
+  const oldSession = { roomId: 'room', currentSessionId: 'first', revision: 10 };
+  const rematch = { roomId: 'room', currentSessionId: 'second', revision: 15 };
+  assert.equal(shouldApplyRoomSnapshot(oldSession.revision, rematch, 'room'), true);
+  assert.equal(shouldApplyRoomSnapshot(rematch.revision, oldSession, 'room'), false);
+  assert.equal(shouldApplyRoomSnapshot(-1, rematch, 'room'), true);
+  assert.equal(shouldApplyRoomSnapshot(-1, rematch, 'another-room'), false);
+  assert.equal(shouldApplyRoomSnapshot(15, { ...rematch, revision: undefined }, 'room'), false);
 });

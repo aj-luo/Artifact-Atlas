@@ -23,3 +23,8 @@ export function getIntermissionPhase(roundStartsAt, serverNow) {
     countdown: Math.max(1, Math.ceil(millisecondsRemaining / 1000)),
   };
 }
+
+// Room revisions never reset when a new session starts.
+export function shouldApplyRoomSnapshot(latestRevision, snapshot, roomId) {
+  return snapshot?.roomId === roomId && shouldApplyRevision(latestRevision, snapshot.revision);
+}

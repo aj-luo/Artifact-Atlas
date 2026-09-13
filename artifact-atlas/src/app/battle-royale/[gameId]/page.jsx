@@ -8,8 +8,10 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
-import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRevision } from './snapshotSync.js';
+import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRoomSnapshot } from './snapshotSync.js';
 import '../battleRoyale.css';
+import RoundResultCard from '../RoundResultCard';
+import RoomHistory from '../RoomHistory';
 
 countries.registerLocale(enLocale);
 const omittedCountries = ['AS', 'IO', 'CW', 'GG', 'GU', 'IM', 'JE', 'PS', 'SX', 'VI', 'AX', 'XK'];
@@ -22,76 +24,17 @@ const formatYear = (y) => {
   return y < 0 ? `${Math.abs(y)} BCE` : `${y} CE`;
 };
 
-const isoToCountryName = (iso3) => {
-  if (!iso3) return '?';
-  const alpha2 = countries.alpha3ToAlpha2(iso3);
-  return countries.getName(alpha2, 'en') ?? iso3;
-};
-
-const formatAnswerDate = (round) => (
-  round.artifactEndYear !== round.artifactBeginYear
-    ? `${formatYear(round.artifactBeginYear)} – ${formatYear(round.artifactEndYear)}`
-    : formatYear(round.artifactBeginYear)
-);
-
-function RoundResultCard({ round, playerId, history = false }) {
-  const players = [...round.guesses].sort((a, b) => b.totalScore - a.totalScore);
-  const metUrl = round.artifactObjectId
-    ? `https://www.metmuseum.org/art/collection/search/${encodeURIComponent(round.artifactObjectId)}`
-    : round.artifactTitle
-      ? `https://www.metmuseum.org/art/collection/search?q=${encodeURIComponent(round.artifactTitle)}`
-      : 'https://www.metmuseum.org/art/collection';
-  return (
-    <section className={`br-result-card ${history ? 'br-history-round-card' : ''}`}>
-      <h3 className="br-reveal-heading">Round {round.round} Results</h3>
-      <div className="br-reveal-answer">
-        {round.artifactImageUrl && (
-          <img
-            src={round.artifactImageUrl}
-            alt={round.artifactTitle ?? 'Revealed artifact'}
-            className="br-reveal-artifact-image"
-          />
-        )}
-        <div className="br-reveal-artifact-name">{round.artifactTitle ?? 'Unknown artifact'}</div>
-        <a className="br-met-link" href={metUrl} target="_blank" rel="noreferrer">
-          View on The Met ↗
-        </a>
-        <div className="br-reveal-answer-row">
-          <span className="br-reveal-label">Country</span>
-          <span className="br-reveal-value">{isoToCountryName(round.artifactIso3)}</span>
-        </div>
-        <div className="br-reveal-answer-row">
-          <span className="br-reveal-label">Date</span>
-          <span className="br-reveal-value">{formatAnswerDate(round)}</span>
-        </div>
-      </div>
-      <div className="br-reveal-players">
-        {players.map(guess => (
-          <div key={guess.playerId} className={`br-reveal-player ${guess.playerId === playerId ? 'is-you' : ''}`}>
-            <span className="br-reveal-player-name">
-              {guess.playerName}
-              {guess.playerId === playerId && <span className="br-you-tag">you</span>}
-              {guess.isEliminated && <span className="br-result-out-tag">out</span>}
-            </span>
-            <span className="br-reveal-player-guess">
-              {guess.countryGuessed ? `${isoToCountryName(guess.countryGuessed)} · ${formatYear(guess.yearGuessed)}` : 'No guess'}
-            </span>
-            <span className="br-reveal-player-score">{guess.totalScore.toLocaleString()} pts</span>
-            <span className={`br-reveal-player-dmg ${guess.hpLost === 0 ? 'best' : ''}`}>
-              {typeof guess.hpLost !== 'number' ? 'HP loss unavailable' : guess.hpLost === 0 ? 'No HP lost' : `-${guess.hpLost.toLocaleString()} HP`}
-            </span>
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 export default function BattleRoyaleRoom() {
   const { gameId } = useParams();
   const router = useRouter();
+  const roomIdRef = useRef(gameId);
+  roomIdRef.current = gameId;
   const [gameState, setGameState] = useState(null);
-  const [playerId, setPlayerId] = useState('');
+  const [identity, setIdentity] = useState(null);
+  const memberId = identity?.memberId;
+  const isMember = !!gameState?.members?.some(m => m.id === memberId);
+  const playerId = gameState?.players?.find(p => p.memberId === memberId)?.id ?? '';
+  const isHost = isMember && memberId === gameState?.hostMemberId;
   const [playerName, setPlayerName] = useState('');
   const [isJoining, setIsJoining] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(null);
@@ -113,8 +56,13 @@ export default function BattleRoyaleRoom() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(`br_player_${gameId}`);
-    if (saved) setPlayerId(saved);
+    latestRevisionRef.current = -1;
+    setGameState(null);
+    try {
+      const saved = JSON.parse(localStorage.getItem(`br_member_${gameId}`) ?? 'null');
+      setIdentity(saved);
+      if (saved?.name) setPlayerName(saved.name);
+    } catch { setIdentity(null); }
   }, [gameId]);
 
   // The server advances to the next artifact before the intermission begins.
@@ -130,7 +78,7 @@ export default function BattleRoyaleRoom() {
   // All state sources use the same monotonic revision gate. serverTime also
   // aligns the countdown without trusting the device's wall clock.
   const applySnapshot = useCallback((data, requestedAt = null, receivedAt = null) => {
-    if (!data || !shouldApplyRevision(latestRevisionRef.current, data.revision)) return false;
+    if (!shouldApplyRoomSnapshot(latestRevisionRef.current, data, roomIdRef.current)) return false;
 
     latestRevisionRef.current = data.revision;
     // Only an HTTP request/response midpoint can distinguish clock skew from
@@ -140,17 +88,28 @@ export default function BattleRoyaleRoom() {
     }
     setGameState(data);
     return true;
-  }, []);
+  }, [gameId]);
+
+  // Clear all session-local input and overlays after a rematch or reconnect.
+  useEffect(() => {
+    setSelectedCountry('');
+    setSelectedYear(new Date().getFullYear());
+    setYearInput(String(new Date().getFullYear()));
+    setIsSubmitting(false);
+    setTimeRemaining(null);
+    setIntermission({ phase: 'none', countdown: null });
+    setIsHistoryOpen(false);
+  }, [gameState?.currentSessionId, gameState?.status, gameState?.currentRound]);
 
   // Stable callback — only recreated when gameId changes
   const fetchStatus = useCallback(async () => {
     try {
       const requestedAt = Date.now();
-      const res = await fetch(`/api/multiplayer/${gameId}/status`);
+      const res = await fetch(`/api/rooms/${gameId}/status`);
       if (res.ok) {
         const data = await res.json();
         applySnapshot(data, requestedAt, Date.now());
-      }
+      } else { setStartError((await res.json()).error ?? 'Unable to load room'); }
     } catch (err) {
       console.error('Status fetch error', err);
     }
@@ -167,14 +126,14 @@ export default function BattleRoyaleRoom() {
     void fetchStatus();
 
     const channel = supabase
-      .channel(`game-${gameId}`)
+      .channel(`room-${gameId}`)
       // Broadcast: full game state delivered by the server directly after each mutation,
       // no HTTP round-trip needed on the client side.
-      .on('broadcast', { event: 'game_update' }, ({ payload }) => {
+      .on('broadcast', { event: 'room_update' }, ({ payload }) => {
         applySnapshot(payload);
       })
       // postgres_changes: safety fallback for any broadcast misses
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_games', filter: `id=eq.${gameId}` }, debouncedFetchStatus)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_rooms', filter: `id=eq.${gameId}` }, debouncedFetchStatus)
       .subscribe((status) => setChannelStatus(status));
 
     return () => {
@@ -235,45 +194,45 @@ export default function BattleRoyaleRoom() {
     return () => clearInterval(interval);
   }, [gameState?.roundStartsAt, gameState?.status]);
 
+  const authHeaders = { 'Content-Type': 'application/json', ...(identity?.credential ? { Authorization: `Bearer ${identity.credential}` } : {}) };
+
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!playerName.trim()) return;
     setIsJoining(true);
     try {
-      const res = await fetch(`/api/multiplayer/${gameId}/join`, {
+      const res = await fetch(`/api/rooms/${gameId}/join`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders,
         body: JSON.stringify({ name: playerName }),
       });
       if (res.ok) {
         const data = await res.json();
-        setPlayerId(data.playerId);
-        localStorage.setItem(`br_player_${gameId}`, data.playerId);
+        const saved = { memberId: data.memberId, credential: data.credential, name: playerName };
+        setIdentity(saved);
+        localStorage.setItem(`br_member_${gameId}`, JSON.stringify(saved));
         applySnapshot(data);
-      }
-    } catch (err) {
-      console.error(err);
-    }
+        setStartError(null);
+      } else { setStartError((await res.json()).error ?? 'Unable to join room'); }
+    } catch { setStartError('Unable to join room'); }
     setIsJoining(false);
   };
 
-  const handleStart = async () => {
+  const roomAction = async (action, targetMemberId) => {
     setIsStarting(true);
     setStartError(null);
     try {
-      const res = await fetch(`/api/multiplayer/${gameId}/start`, { method: 'POST' });
-      if (res.ok) {
-        applySnapshot(await res.json());
-      } else {
-        const data = await res.json().catch(() => ({}));
-        setStartError(data.error ?? 'Failed to start game');
-      }
-    } catch {
-      setStartError('Network error — try again');
-    } finally {
-      setIsStarting(false);
-    }
+      const res = await fetch(`/api/rooms/${gameId}/${action}`, {
+        method: 'POST', headers: authHeaders,
+        body: JSON.stringify({ expectedSessionId: gameState.currentSessionId, memberId: targetMemberId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Unable to update room');
+      applySnapshot(data);
+    } catch (error) { setStartError(error.message); }
+    finally { setIsStarting(false); }
   };
+  const handleStart = () => roomAction('start');
 
   const handleYearInputChange = (e) => {
     setYearInput(e.target.value);
@@ -296,10 +255,10 @@ export default function BattleRoyaleRoom() {
     if (!alpha3) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`/api/multiplayer/${gameId}/guess`, {
+      const res = await fetch(`/api/multiplayer/${gameState.currentSessionId}/guess`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId, country: alpha3, year: selectedYear }),
+        headers: authHeaders,
+        body: JSON.stringify({ playerId, country: alpha3, year: selectedYear, roundNumber: gameState.currentRound }),
       });
       // Apply the full game state from the response immediately (score + post-resolution state)
       // so the UI updates within network RTT rather than waiting for the next poll.
@@ -310,6 +269,8 @@ export default function BattleRoyaleRoom() {
         // Late-guess rejections include the authoritative post-expiry snapshot.
         const data = await res.json().catch(() => null);
         if (data?.revision != null) applySnapshot(data);
+        setStartError(data?.error ?? 'Guess was not accepted');
+        void fetchStatus();
       }
     } catch (err) {
       console.error(err);
@@ -356,6 +317,7 @@ export default function BattleRoyaleRoom() {
                 <span className="br-player-tags">
                   {p.id === playerId && <span className="br-you-tag">you</span>}
                   {p.id === gameState.hostId && <span className="br-host-tag">👑 host</span>}
+                  {isHost && p.memberId !== memberId && <button className="br-history-button" disabled={isStarting} onClick={() => roomAction('remove', p.memberId)}>Remove</button>}
                 </span>
               </li>
             ))}
@@ -363,7 +325,7 @@ export default function BattleRoyaleRoom() {
         </div>
 
         {gameState.players.length >= 2
-          ? playerId === gameState.hostId
+          ? isHost
             ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', width: '100%', maxWidth: '300px' }}>
                 {startError && <p className="br-start-error">{startError}</p>}
@@ -418,7 +380,7 @@ export default function BattleRoyaleRoom() {
 
           {/* Controls + health bars pane */}
           <div className="br-controls-pane" inert={isIntermission}>
-            {me?.isEliminated ? (
+            {!me ? <div className="br-waiting">Spectating this session</div> : me?.isEliminated ? (
               <div className="br-eliminated">You were eliminated. Spectating…</div>
             ) : !isIntermission && timeRemaining === 0 ? (
               <div className="br-waiting">Time’s up — loading results…</div>
@@ -491,11 +453,12 @@ export default function BattleRoyaleRoom() {
   // ── Finished ───────────────────────────────────────────────────────────────────
 
   const renderFinished = () => {
-    const sorted = [...gameState.players].sort((a, b) => b.health - a.health);
+    const sorted = [...gameState.players].sort((a, b) => (a.finalPlacement ?? Infinity) - (b.finalPlacement ?? Infinity));
+    const winners = sorted.filter(p => p.finalPlacement === 1);
     return (
       <div className="br-finished">
         <h2 className="br-finished-title">GAME OVER</h2>
-        <h1 className="br-winner-name">{sorted[0].name} Wins!</h1>
+        <h1 className="br-winner-name">{winners.length ? `${winners.map(p => p.name).join(' & ')} ${winners.length > 1 ? 'are joint winners!' : 'Wins!'}` : 'Placements unavailable'}</h1>
         {gameState.lastRoundReveal && (
           <div className="br-finished-result">
             <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
@@ -503,8 +466,8 @@ export default function BattleRoyaleRoom() {
         )}
         <div className="br-leaderboard">
           {sorted.map((p, i) => (
-            <div key={p.id} className={`br-lb-row ${i === 0 ? 'winner' : ''}`}>
-              <span className="br-lb-rank">{MEDALS[i] ?? `#${i + 1}`}</span>
+            <div key={p.id} className={`br-lb-row ${p.finalPlacement === 1 ? 'winner' : ''}`}>
+              <span className="br-lb-rank">{p.finalPlacement == null ? '—' : MEDALS[p.finalPlacement - 1] ?? `#${p.finalPlacement}`}</span>
               <span className="br-lb-name">
                 {p.name}
                 {p.id === playerId && <span className="br-you-tag">you</span>}
@@ -523,12 +486,9 @@ export default function BattleRoyaleRoom() {
           <button className="br-btn br-btn-secondary" onClick={() => router.push('/')}>
             HOME
           </button>
-          <button
-            className="br-btn br-btn-secondary"
-            onClick={() => router.push('/battle-royale')}
-          >
-            PLAY AGAIN
-          </button>
+          {isHost ? <button className="br-btn br-btn-primary" disabled={isStarting} onClick={() => roomAction('reopen')}>
+            Return to Lobby
+          </button> : <p className="br-waiting-msg">Waiting for the host to return to the lobby…</p>}
         </div>
       </div>
     );
@@ -539,16 +499,17 @@ export default function BattleRoyaleRoom() {
   if (!gameState) {
     return (
       <div className="br-page">
-        <div className="br-loading">Loading Battle Royale…</div>
+        <div className="br-loading">{startError ?? 'Loading Battle Royale…'}</div>
       </div>
     );
   }
 
-  if (!playerId) {
+  if (!isMember && gameState.status === 'waiting') {
     return (
       <div className="br-page">
         <div className="br-card br-join-card">
-          <h2>Join Game</h2>
+          <h2>Join Room</h2>
+          {startError && <p className="br-error" role="alert">{startError}</p>}
           <p>Pick a nickname to enter the lobby.</p>
           <form onSubmit={handleJoin} className="br-join-form">
             <input
@@ -565,15 +526,19 @@ export default function BattleRoyaleRoom() {
             </button>
           </form>
         </div>
+        <RoomHistory roomId={gameId} revision={gameState.revision} />
       </div>
     );
   }
 
   return (
     <div className="br-page">
+      {startError && <p className="br-error" role="alert">{startError}</p>}
       {gameState.status === 'waiting'  && renderLobby()}
       {gameState.status === 'active'   && renderActive()}
       {gameState.status === 'finished' && renderFinished()}
+      {gameState.status === 'waiting' && isMember && <button className="br-btn br-btn-leave" disabled={isStarting} onClick={() => roomAction('leave')}>Leave Room</button>}
+      <RoomHistory roomId={gameId} revision={gameState.revision} />
       {isHistoryOpen && (
         <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
           <div className="br-history-panel">

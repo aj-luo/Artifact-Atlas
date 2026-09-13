@@ -9,7 +9,8 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:migrate": "prisma migrate dev",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "test:rooms": "node --test tests/rooms.test.cjs"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
@@ -21,6 +22,7 @@
     "swagger-ui-react": "^5.32.15"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/swagger-ui-react": "^5.18.0",
