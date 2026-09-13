@@ -1,5 +1,13 @@
 Battle royale rooms and sessions
 
+Before deploying the synchronized game-end changes, apply the additive
+`20260914000000_results_reveal` migration and regenerate Prisma. Finished snapshots
+include nullable `resultsRevealAt`, set once at finalization to database time plus
+one second. Clients gate final results on that shared timestamp using their server
+clock estimate; late arrivals and legacy sessions reveal immediately. Guess
+responses and broadcasts reuse the same consistent snapshot. Concurrent guesses
+that require deferred resolution schedule recovery on the server after response.
+
 Apply `20260913000000_multiplayer_rooms` before deploying the new backend and frontend together. The migration is additive. Every legacy game keeps its ID and is linked to a room with that same ID, so existing links still resolve. Applied to the configured application database on September 12, 2026. Post-migration verification confirmed that all 16 existing sessions, 20 players, and 99 guesses were preserved, with every session and player linked to its room and member. The room revision trigger and realtime publication were also verified.
 
 `POST /api/multiplayer/create` now creates a room and returns both `roomId` and the compatibility alias `gameId`. Room routes are `/api/rooms/:roomId/status`, `/join`, `/start`, `/reopen`, `/leave`, `/remove`, `/statistics`, `/sessions`, and `/sessions/:sessionId`. Session lists accept `page` (default 1), `limit` (1–50, default 10), and optional `memberId`. Only completed sessions appear. Details include all available round cards and finalized standings.

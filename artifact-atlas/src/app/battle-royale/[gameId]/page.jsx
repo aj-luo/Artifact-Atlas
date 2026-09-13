@@ -8,7 +8,7 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
-import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, isResultsRevealPending, shouldApplyRoomSnapshot } from './snapshotSync.js';
 import '../battleRoyale.css';
 import RoundResultCard from '../RoundResultCard';
 import RoomHistory from '../RoomHistory';
@@ -44,6 +44,12 @@ export default function BattleRoyaleRoom() {
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [yearInput, setYearInput] = useState(String(currentYear));
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const pendingGuessRef = useRef(null);
+  const statusRequestRef = useRef(null);
+  const [, tickReveal] = useState(0);
+  const submissionScope = `${gameId}:${gameState?.currentSessionId}:${gameState?.currentRound}:${gameState?.status}`;
+  const submissionScopeRef = useRef(submissionScope);
+  submissionScopeRef.current = submissionScope;
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -52,11 +58,23 @@ export default function BattleRoyaleRoom() {
   const debounceRef = useRef(null);
   const latestRevisionRef = useRef(-1);
   const serverClockOffsetRef = useRef(0);
+  const bestClockRoundTripRef = useRef(Infinity);
+  const revealPending = isResultsRevealPending(gameState, Date.now() + serverClockOffsetRef.current);
   const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
+    if (!revealPending) return;
+    const timer = setInterval(() => tickReveal(value => value + 1), 25);
+    return () => clearInterval(timer);
+  }, [revealPending, gameState?.currentSessionId, gameState?.resultsRevealAt]);
+
+  useEffect(() => () => { pendingGuessRef.current = null; }, []);
+
+  useEffect(() => {
     latestRevisionRef.current = -1;
+    bestClockRoundTripRef.current = Infinity;
+    serverClockOffsetRef.current = 0;
     setGameState(null);
     try {
       const saved = JSON.parse(localStorage.getItem(`br_member_${gameId}`) ?? 'null');
@@ -83,7 +101,11 @@ export default function BattleRoyaleRoom() {
     latestRevisionRef.current = data.revision;
     // Only an HTTP request/response midpoint can distinguish clock skew from
     // network delay. A delayed broadcast must not move the estimated clock.
-    if (data.serverTime && requestedAt != null && receivedAt != null) {
+    // A slow mutation includes server processing time; prefer the least-delayed
+    // sample so it cannot shift one player's shared reveal clock.
+    if (data.serverTime && requestedAt != null && receivedAt != null
+      && receivedAt - requestedAt <= bestClockRoundTripRef.current) {
+      bestClockRoundTripRef.current = receivedAt - requestedAt;
       serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt);
     }
     setGameState(data);
@@ -96,6 +118,7 @@ export default function BattleRoyaleRoom() {
     setSelectedYear(new Date().getFullYear());
     setYearInput(String(new Date().getFullYear()));
     setIsSubmitting(false);
+    pendingGuessRef.current = null;
     setTimeRemaining(null);
     setIntermission({ phase: 'none', countdown: null });
     setIsHistoryOpen(false);
@@ -103,16 +126,26 @@ export default function BattleRoyaleRoom() {
 
   // Stable callback — only recreated when gameId changes
   const fetchStatus = useCallback(async () => {
-    try {
-      const requestedAt = Date.now();
-      const res = await fetch(`/api/rooms/${gameId}/status`);
-      if (res.ok) {
-        const data = await res.json();
-        applySnapshot(data, requestedAt, Date.now());
-      } else { setStartError((await res.json()).error ?? 'Unable to load room'); }
-    } catch (err) {
-      console.error('Status fetch error', err);
+    if (statusRequestRef.current?.roomId === gameId) {
+      statusRequestRef.current.queued = true;
+      return;
     }
+    const request = { roomId: gameId, queued: false };
+    statusRequestRef.current = request;
+    do {
+      request.queued = false;
+      try {
+        const requestedAt = Date.now();
+        const res = await fetch(`/api/rooms/${gameId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          applySnapshot(data, requestedAt, Date.now());
+        } else if (roomIdRef.current === gameId) { setStartError((await res.json()).error ?? 'Unable to load room'); }
+      } catch (err) {
+        console.error('Status fetch error', err);
+      }
+    } while (request.queued && roomIdRef.current === gameId);
+    if (statusRequestRef.current === request) statusRequestRef.current = null;
   }, [gameId, applySnapshot]);
 
   // Batch rapid game-row invalidations into one status request.
@@ -246,36 +279,50 @@ export default function BattleRoyaleRoom() {
   };
 
   const submitGuess = async () => {
-    if (!playerId || !selectedCountry) return;
+    if (!playerId || !selectedCountry || pendingGuessRef.current) return;
     const serverNow = Date.now() + serverClockOffsetRef.current;
     if (gameState?.status !== 'active' ||
         getIntermissionPhase(gameState.roundStartsAt, serverNow).phase !== 'none' ||
         getRoundTimeRemaining(gameState.roundStartsAt, gameState.roundEndsAt, serverNow) === 0) return;
     const alpha3 = countries.alpha2ToAlpha3(selectedCountry);
     if (!alpha3) return;
+    const pending = { scope: submissionScope };
+    pendingGuessRef.current = pending;
     setIsSubmitting(true);
+    setStartError(null);
     try {
+      const requestedAt = Date.now();
       const res = await fetch(`/api/multiplayer/${gameState.currentSessionId}/guess`, {
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({ playerId, country: alpha3, year: selectedYear, roundNumber: gameState.currentRound }),
       });
+      if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
       // Apply the full game state from the response immediately (score + post-resolution state)
       // so the UI updates within network RTT rather than waiting for the next poll.
       if (res.ok) {
         const data = await res.json();
-        applySnapshot(data);
+        applySnapshot(data, requestedAt, Date.now());
       } else {
-        // Late-guess rejections include the authoritative post-expiry snapshot.
+        // Accept an attached snapshot when available, then recover current state.
         const data = await res.json().catch(() => null);
+        if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
         if (data?.revision != null) applySnapshot(data);
         setStartError(data?.error ?? 'Guess was not accepted');
         void fetchStatus();
       }
     } catch (err) {
       console.error(err);
+      if (pendingGuessRef.current === pending && submissionScopeRef.current === pending.scope) {
+        setStartError('Unable to confirm your guess. Reconnecting…');
+        void fetchStatus();
+      }
+    } finally {
+      if (pendingGuessRef.current === pending) {
+        pendingGuessRef.current = null;
+        setIsSubmitting(false);
+      }
     }
-    setIsSubmitting(false);
   };
 
   // ── Lobby ──────────────────────────────────────────────────────────────────────
@@ -387,7 +434,7 @@ export default function BattleRoyaleRoom() {
             ) : me?.hasGuessedThisRound ? (
               <div className="br-waiting">Guess submitted — waiting for others…</div>
             ) : (
-              <div className="br-guess-panel">
+              <fieldset className="br-guess-panel" disabled={isSubmitting} inert={isSubmitting} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
                 <p className="br-guess-prompt">Where is this artifact from?</p>
                 <ReactFlagsSelect
                   selected={selectedCountry}
@@ -412,9 +459,9 @@ export default function BattleRoyaleRoom() {
                   onClick={submitGuess}
                   disabled={isSubmitting || !selectedCountry || isIntermission || timeRemaining === 0}
                 >
-                  {isSubmitting ? 'SUBMITTING…' : 'SUBMIT GUESS'}
+                  {isSubmitting ? 'Sending guess…' : 'SUBMIT GUESS'}
                 </button>
-              </div>
+              </fieldset>
             )}
 
             <div className="br-health-bars">
@@ -536,10 +583,12 @@ export default function BattleRoyaleRoom() {
       {startError && <p className="br-error" role="alert">{startError}</p>}
       {gameState.status === 'waiting'  && renderLobby()}
       {gameState.status === 'active'   && renderActive()}
-      {gameState.status === 'finished' && renderFinished()}
+      {gameState.status === 'finished' && (revealPending
+        ? <div className="br-waiting" role="status">Round complete — syncing results…</div>
+        : renderFinished())}
       {gameState.status === 'waiting' && isMember && <button className="br-btn br-btn-leave" disabled={isStarting} onClick={() => roomAction('leave')}>Leave Room</button>}
-      <RoomHistory roomId={gameId} revision={gameState.revision} />
-      {isHistoryOpen && (
+      {!revealPending && <RoomHistory roomId={gameId} revision={gameState.revision} />}
+      {isHistoryOpen && !revealPending && (
         <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
           <div className="br-history-panel">
             <div className="br-history-header">

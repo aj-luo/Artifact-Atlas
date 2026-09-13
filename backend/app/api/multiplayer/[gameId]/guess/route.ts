@@ -1,5 +1,5 @@
-import { authorizeGuess, credential, roomSnapshot } from '@/lib/multiplayer/Room';
-import { NextRequest, NextResponse } from 'next/server';
+import { authorizeGuess, broadcastRoom, credential, roomSnapshot, roomStatus } from '@/lib/multiplayer/Room';
+import { after, NextRequest, NextResponse } from 'next/server';
 import { GameSession, GameSessionError } from '@/lib/multiplayer/GameSession';
 import { scheduleGameBroadcast } from '@/lib/multiplayer/scheduleBroadcast';
 
@@ -47,13 +47,24 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
-    const { score, roundResolved } = await session.submitGuess(playerId, country, Number(year), body.roundNumber);
-    scheduleGameBroadcast(session);
+    const { score, roundResolved } = await session.submitGuess(playerId, country, Number(year), body.roundNumber, false);
+    const snapshot = await roomSnapshot(roomId);
+    after(async () => {
+      await broadcastRoom(roomId, snapshot);
+    });
+    // Concurrent submissions can complete a round without a prefetched artifact.
+    // Resolve that case on the server, independently of client polling.
+    if (!roundResolved && snapshot.status === 'active' && snapshot.players
+      .filter(player => !player.isEliminated).every(player => 'hasGuessedThisRound' in player && player.hasGuessedThisRound)) {
+      after(async () => {
+        await broadcastRoom(roomId, await roomStatus(roomId));
+      });
+    }
 
     return NextResponse.json({
       score,
       roundResolved,
-      ...await roomSnapshot(roomId),
+      ...snapshot,
     });
   } catch (err) {
     if (err instanceof GameSessionError) {

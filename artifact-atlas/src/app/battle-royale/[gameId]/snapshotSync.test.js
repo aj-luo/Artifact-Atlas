@@ -1,6 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, isResultsRevealPending, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
+
+test('finished results share a reveal deadline across clock offsets and late arrivals', () => {
+  const revealAt = Date.parse('2026-09-12T12:00:20.000Z');
+  const snapshot = { status: 'finished', resultsRevealAt: new Date(revealAt).toISOString() };
+  for (const offset of [-5000, 0, 5000]) {
+    const localNow = revealAt - 1000 - offset;
+    assert.equal(isResultsRevealPending(snapshot, localNow + offset), true);
+    assert.equal(isResultsRevealPending(snapshot, localNow + offset + 1000), false);
+  }
+  assert.equal(isResultsRevealPending(snapshot, revealAt + 5000), false);
+  assert.equal(isResultsRevealPending({ status: 'finished' }, revealAt), false);
+  assert.equal(isResultsRevealPending({ ...snapshot, status: 'active' }, revealAt - 1), false);
+});
 
 test('an older HTTP snapshot cannot overwrite a newer broadcast', () => {
   assert.equal(shouldApplyRevision(8, 7), false);

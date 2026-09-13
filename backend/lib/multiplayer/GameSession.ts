@@ -54,6 +54,7 @@ export interface GameStatusResponse {
   currentArtifact: { imageUrl: string } | null;
   roundStartsAt: string | null;
   roundEndsAt: string | null;
+  resultsRevealAt: string | null;
   players: PlayerStatus[];
   lastRoundReveal: LastRoundReveal | null;
   roundHistory: LastRoundReveal[];
@@ -138,21 +139,22 @@ export class GameSession {
     this.roundGuesses = updated.roundGuesses;
   }
 
-  async submitGuess(playerId: string, country: string, year: number, expectedRound: number): Promise<GuessResult> {
+  async submitGuess(playerId: string, country: string, year: number, expectedRound: number, refresh = true): Promise<GuessResult> {
     if (!this.game.artifact_iso3 || this.game.artifact_begin_year == null || this.game.artifact_end_year == null) {
       throw new GameSessionError('Game artifact is not set', 500);
     }
 
     const normalizedCountry = country.toUpperCase();
-    const score = await ScoringModule.calculateScore(
-      normalizedCountry, this.game.artifact_iso3, year,
-      this.game.artifact_begin_year, this.game.artifact_end_year,
-    );
     const activePlayerCount = this.players.filter((player) => !player.is_eliminated).length;
     const likelyToResolve = this.roundGuesses.length + 1 >= activePlayerCount;
     // Artifact selection can require database work. Keep ordinary guesses on the
     // fast path and only prefetch when this guess is expected to end the round.
-    const nextArtifact = likelyToResolve ? await pickRandomArtifact() : null;
+    const [score, nextArtifact] = await Promise.all([
+      ScoringModule.calculateScore(normalizedCountry, this.game.artifact_iso3, year,
+        this.game.artifact_begin_year, this.game.artifact_end_year),
+      likelyToResolve && activePlayerCount > 1 && this.game.current_round < this.game.max_rounds
+        ? pickRandomArtifact() : Promise.resolve(null),
+    ]);
 
     const result = await db.$transaction(async (tx) => {
       let game = await lockGame(tx, this.game.id);
@@ -210,7 +212,7 @@ export class GameSession {
       return { late: false as const, score, roundResolved };
     });
 
-    await this.refresh();
+    if (refresh) await this.refresh();
     if (result.late) {
       throw new GameSessionError('Round has ended; this guess was not accepted', 409, result.resolved);
     }
@@ -234,7 +236,9 @@ export class GameSession {
       .every((player) => this.roundGuesses.some((guess) => guess.player_id === player.id));
     if (!timerExpired && !allGuessed) return initialized;
 
-    const nextArtifact = await pickRandomArtifact();
+    const needsArtifact = this.game.current_round < this.game.max_rounds
+      && this.players.filter(player => !player.is_eliminated).length > 1;
+    const nextArtifact = needsArtifact ? await pickRandomArtifact() : null;
     const resolved = await db.$transaction(async (tx) => {
       const game = await lockGame(tx, this.game.id);
       if (!game || game.status !== 'active') return false;
@@ -333,7 +337,9 @@ export class GameSession {
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
-          status: 'finished', completed_at: now, last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
+          status: 'finished', completed_at: now,
+          results_reveal_at: new Date((await databaseNow(tx)).getTime() + 1000),
+          last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
           round_history: roundHistory,
           round_starts_at: null,
           revision: { increment: 1 },
@@ -382,6 +388,7 @@ export class GameSession {
       currentArtifact: this.game.artifact_image_url ? { imageUrl: this.game.artifact_image_url } : null,
       roundStartsAt: this.game.round_starts_at?.toISOString() ?? null,
       roundEndsAt: this.game.round_ends_at?.toISOString() ?? null,
+      resultsRevealAt: this.game.results_reveal_at?.toISOString() ?? null,
       players: players.map((player) => ({
         id: player.id, memberId: player.member_id, name: player.name, health: player.health,
         finalPlacement: player.final_placement, cumulativeScore: player.cumulative_score,

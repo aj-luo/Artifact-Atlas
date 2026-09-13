@@ -40,10 +40,38 @@ async function fresh() {
   const pg = new PGlite();
   await pg.exec(baseline);
   await pg.exec(migration);
+  await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20260914000000_results_reveal/migration.sql'), 'utf8'));
   return { pg, db: postgresClient(pg) };
 }
 
 const rejected = (promise, status) => assert.rejects(promise, error => error.statusCode === status);
+
+test('stale concurrent guess views recover without double finalization', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 500, max_rounds: 3 } });
+    const host = await s.joinRoom(room.id, 'Host', '');
+    await s.joinRoom(room.id, 'Guest', '');
+    const state = await s.transitionRoom(room.id, 'start', host.credential, null);
+    // Both requests load before either commits, so neither prefetches an artifact.
+    const first = await s.GameSession.load(state.currentSessionId);
+    const second = await s.GameSession.load(state.currentSessionId);
+    await first.submitGuess(state.players[0].id, 'USA', 1000, 1, false);
+    const result = await second.submitGuess(state.players[1].id, 'USA', 0, 1, false);
+    assert.equal(result.roundResolved, false);
+    assert.ok((await s.roomSnapshot(room.id)).players.every(p => p.hasGuessedThisRound));
+    let broadcast;
+    const finished = await s.roomStatus(room.id, snapshot => { broadcast = snapshot; });
+    assert.equal(finished.status, 'finished');
+    assert.equal(broadcast, finished);
+    assert.ok(finished.resultsRevealAt);
+    const recovered = await s.roomStatus(room.id);
+    assert.equal(recovered.resultsRevealAt, finished.resultsRevealAt);
+    assert.deepEqual(recovered.players, finished.players);
+    assert.equal(recovered.roundHistory.length, 1);
+  } finally { await pg.close(); }
+});
 
 test('additive migration preserves legacy history and only awards reconstructable placements', async () => {
   const pg = new PGlite();
@@ -122,11 +150,15 @@ test('rematches, credentials, membership changes, atomic results, and history', 
     await rejected((await s.GameSession.load(firstId)).submitGuess(firstPlayers[0].id, 'USA', 1000, 1), 409);
     state = await playRound([1000, 0]);
     assert.equal(state.status, 'finished');
+    const revealAt = state.resultsRevealAt;
+    assert.ok(Number.isFinite(Date.parse(revealAt)));
+    assert.ok(Date.parse(revealAt) > Date.now());
     assert.deepEqual(state.players.map(p => p.finalPlacement), [1, 2, 3]);
     assert.deepEqual(state.players.map(p => p.eliminationRound), [null, 2, 1]);
     const before = await s.memberStatistics(room.id);
     await Promise.all([s.GameSession.load(firstId).then(g => g.resolveRoundIfNeeded()), s.GameSession.load(firstId).then(g => g.resolveRoundIfNeeded())]);
     assert.deepEqual(await s.memberStatistics(room.id), before);
+    assert.equal((await s.roomSnapshot(room.id)).resultsRevealAt, revealAt);
     const oldDetails = await s.sessionDetails(room.id, firstId);
     await Promise.all([s.transitionRoom(room.id, 'reopen', host.credential, firstId), s.transitionRoom(room.id, 'reopen', host.credential, firstId)]);
     state = await s.roomSnapshot(room.id);

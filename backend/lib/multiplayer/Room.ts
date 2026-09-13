@@ -48,15 +48,18 @@ export async function roomSnapshot(roomId: string) {
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
-export async function roomStatus(roomId: string) {
+export async function roomStatus(roomId: string, onResolved?: (snapshot: Awaited<ReturnType<typeof roomSnapshot>>) => void) {
   if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
   const room = await db.multiplayer_rooms.findUnique({ where: { id: roomId } });
   if (!room) throw new GameSessionError('Room not found', 404);
+  let resolved = false;
   if (room.status === 'active' && room.current_session_id) {
     const session = await GameSession.load(room.current_session_id);
-    if (await session?.resolveRoundIfNeeded()) await broadcastRoom(roomId);
+    resolved = await session?.resolveRoundIfNeeded() ?? false;
   }
-  return roomSnapshot(roomId);
+  const snapshot = await roomSnapshot(roomId);
+  if (resolved) onResolved?.(snapshot);
+  return snapshot;
 }
 
 export async function joinRoom(roomId: string, name: unknown, token: string) {
@@ -140,20 +143,22 @@ export async function authorizeGuess(gameId: string, token: string, playerId: st
   if (!isUuid(gameId) || !isUuid(playerId)) throw new GameSessionError('Invalid session or player ID');
   const game = await db.multiplayer_games.findUnique({ where: { id: gameId } });
   if (!game?.room_id) throw new GameSessionError('Session not found', 404);
-  const member = await authenticate(db, game.room_id, token);
-  const room = await db.multiplayer_rooms.findUnique({ where: { id: game.room_id } });
+  const [member, room] = await Promise.all([
+    authenticate(db, game.room_id, token),
+    db.multiplayer_rooms.findUnique({ where: { id: game.room_id } }),
+  ]);
   if (room?.current_session_id !== gameId || room.status !== 'active') throw new GameSessionError('Session is no longer active', 409);
   const player = await db.multiplayer_players.findFirst({ where: { id: playerId, game_id: gameId, member_id: member.id } });
   if (!player) throw new GameSessionError('Player does not belong to this member', 403);
   return game.room_id;
 }
 
-export async function broadcastRoom(roomId: string) {
+export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnType<typeof roomSnapshot>>) {
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!url || !key) return;
-    const payload = await roomSnapshot(roomId);
+    const payload = snapshot ?? await roomSnapshot(roomId);
     const response = await fetch(`${url}/realtime/v1/api/broadcast`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, apikey: key },
       body: JSON.stringify({ messages: [{ topic: `room-${roomId}`, event: 'room_update', payload }] }),

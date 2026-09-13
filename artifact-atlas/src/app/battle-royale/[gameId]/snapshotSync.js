@@ -2,6 +2,11 @@ export function shouldApplyRevision(latestRevision, incomingRevision) {
   return Number.isInteger(incomingRevision) && incomingRevision >= latestRevision;
 }
 
+export function isResultsRevealPending(snapshot, serverNow) {
+  return snapshot?.status === 'finished' && !!snapshot.resultsRevealAt
+    && serverNow < Date.parse(snapshot.resultsRevealAt);
+}
+
 export function getRoundTimeRemaining(roundStartsAt, roundEndsAt, serverNow) {
   if (!roundEndsAt) return null;
   if (roundStartsAt && serverNow < new Date(roundStartsAt).getTime()) return null;

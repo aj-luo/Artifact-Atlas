@@ -16,7 +16,8 @@ export async function GET(req: Request, { params }: Params) {
   try {
     const { roomId, action } = await params;
     if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
-    if (action === 'status') return NextResponse.json(await roomStatus(roomId));
+    if (action === 'status') return NextResponse.json(await roomStatus(roomId,
+      snapshot => after(() => broadcastRoom(roomId, snapshot))));
     if (!await db.multiplayer_rooms.findUnique({ where: { id: roomId }, select: { id: true } })) throw new GameSessionError('Room not found', 404);
     if (action === 'statistics') return NextResponse.json({ members: await memberStatistics(roomId) });
     if (action === 'sessions') return NextResponse.json(await sessionHistory(roomId, new URL(req.url).searchParams));
