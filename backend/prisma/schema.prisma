@@ -156,7 +156,45 @@ model iso_code_mapping {
   intermediate_region_code String? @map("intermediate-region-code")
 }
 
+model multiplayer_rooms {
+  id                 String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status             String @default("waiting") @db.VarChar(16)
+  host_member_id     String? @db.Uuid
+  current_session_id String? @unique @db.Uuid
+  revision           Int @default(0)
+  session_count      Int @default(0)
+  max_rounds         Int @default(10)
+  max_health         Int @default(25000)
+  countdown_seconds  Int @default(60)
+  created_at         DateTime @default(now()) @db.Timestamptz(6)
+  members            multiplayer_room_members[]
+  sessions           multiplayer_games[] @relation("RoomSessions")
+  current_session    multiplayer_games? @relation("CurrentSession", fields: [current_session_id], references: [id])
+  host               multiplayer_room_members? @relation("RoomHost", fields: [host_member_id], references: [id])
+}
+
+model multiplayer_room_members {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  room_id         String @db.Uuid
+  name            String @db.VarChar(32)
+  credential_hash String? @unique @db.VarChar(64)
+  joined_at       DateTime @default(now()) @db.Timestamptz(6)
+  left_at         DateTime? @db.Timestamptz(6)
+  room            multiplayer_rooms @relation(fields: [room_id], references: [id])
+  hosted_rooms    multiplayer_rooms[] @relation("RoomHost")
+  participations  multiplayer_players[]
+
+  @@index([room_id, left_at, joined_at])
+}
+
 model multiplayer_games {
+  room_id             String? @db.Uuid
+  session_number      Int?
+  completed_at        DateTime? @db.Timestamptz(6)
+  results_reveal_at    DateTime? @db.Timestamptz(6)
+  room                multiplayer_rooms? @relation("RoomSessions", fields: [room_id], references: [id])
+  current_in_room     multiplayer_rooms? @relation("CurrentSession")
+  @@unique([room_id, session_number])
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   status              String                @default("waiting") @db.VarChar(16)
   current_round       Int                   @default(0)
@@ -181,6 +219,13 @@ model multiplayer_games {
 }
 
 model multiplayer_players {
+  member_id        String? @db.Uuid
+  final_placement  Int?
+  elimination_round Int?
+  cumulative_score Int @default(0)
+  completed_at     DateTime? @db.Timestamptz(6)
+  member          multiplayer_room_members? @relation(fields: [member_id], references: [id])
+  @@unique([game_id, member_id])
   id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   game_id       String                @db.Uuid
   name          String                @db.VarChar(32)
