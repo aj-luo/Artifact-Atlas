@@ -13,6 +13,7 @@ import Multiplayer from '../Multiplayer/Multiplayer.jsx'
 import Party from '../Party/Party.jsx'
 import PartyLobby from '../PartyLobby/PartyLobby.jsx'
 import PartyWaitingRoom from '../PartyWaitingRoom/PartyWaitingRoom.jsx'
+import JoinLobby from '../JoinLobby/JoinLobby.jsx'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -40,6 +41,8 @@ export default function Home() {
         return <PartyLobby setCurrentView={setCurrentView} setGameId={setGameId}/>;
       case 'partywaitingroom':
         return <PartyWaitingRoom setCurrentView={setCurrentView} gameId={gameId}/>;
+      case 'joinlobby':
+        return <JoinLobby setCurrentView={setCurrentView} setGameId={setGameId}/>;
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }

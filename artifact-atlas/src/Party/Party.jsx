@@ -1,7 +1,10 @@
 import styles from './Party.module.css';
 import partiers from '../assets/party_archeologists.png';
+import { useState } from 'react';
 
 function Party({ setCurrentView }) {
+    const [lobbyCode, setLobbyCode] = useState('');
+
     return (
         <div className={styles.home}>
             <p className={styles.tagline}>WELCOME TO PARTY MODE!</p>
@@ -19,10 +22,9 @@ function Party({ setCurrentView }) {
                 
                 {/* Join group holding the Join button and input */}
                 <div className={styles.joinGroup}>
-                    <button className={styles.start_button}>
+                    <button className={styles.start_button} onClick={() => setCurrentView('joinlobby')}>
                         JOIN LOBBY
                     </button>
-                    <input type="text" placeholder="Enter Lobby Code" className={styles.lobbyInput} />
                 </div>
             </div>
         </div>
