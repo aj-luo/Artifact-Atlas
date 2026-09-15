@@ -78,6 +78,7 @@ export class GameSessionError extends Error {
 
 type Transaction = Prisma.TransactionClient;
 
+//lock the game row for update to prevent race conditions when multiple players are joining the same game at the same time. This is used in the join method to ensure that the player count is accurate and that the game is still in waiting state before allowing a new player to join.
 async function lockGame(tx: Transaction, gameId: string): Promise<multiplayer_games | null> {
   // Global lock order: room before session, shared with room transitions.
   await tx.$queryRaw`SELECT id FROM multiplayer_rooms WHERE id =
@@ -92,6 +93,7 @@ export async function databaseNow(tx: Transaction): Promise<Date> {
   const rows = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
   return rows[0].now;
 }
+
 
 function roundDuration(seconds: number): number {
   return Math.min(120, Math.max(30, seconds));
