@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GameSession } from '@/lib/multiplayer/GameSession';
+import { db } from '@/lib/db';
+import { isUuid } from '@/lib/multiplayer/Room';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -14,11 +15,11 @@ type Params = { params: Promise<{ gameId: string }> };
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const { gameId } = await params;
-    const session = await GameSession.load(gameId);
+    const session = isUuid(gameId) ? await db.multiplayer_rooms.findUnique({ where: { id: gameId } }) : null;
     if (!session) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
-    const { status } = session.getStatus();
+    const { status } = session;
     return NextResponse.json({ exists: true, status });
   } catch (err) {
     console.error('[multiplayer/exists] Unhandled error:', err);
