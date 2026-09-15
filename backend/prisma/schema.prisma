@@ -157,38 +157,53 @@ model iso_code_mapping {
 }
 
 model multiplayer_games {
-  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  status              String                @default("waiting") @db.VarChar(16)
-  current_round       Int                   @default(0)
-  max_rounds          Int                   @default(10)
-  countdown_seconds   Int                   @default(20)
-  object_id           BigInt?
-  artifact_iso3       String?               @db.VarChar(3)
-  artifact_begin_year Int?
-  artifact_end_year   Int?
-  artifact_image_url  String?
-  artifact_title      String?
-  round_ends_at       DateTime?             @db.Timestamptz(6)
-  last_round_reveal   Json?
-  created_at          DateTime              @default(now()) @db.Timestamptz(6)
-  updated_at          DateTime              @updatedAt @db.Timestamptz(6)
-  max_health          Int                   @default(25000)
-  revision            Int                   @default(0)
-  round_starts_at     DateTime?             @db.Timestamptz(6)
-  round_history       Json?
-  guesses             multiplayer_guesses[]
-  players             multiplayer_players[]
+  id                                                                        String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status                                                                    String                @default("waiting") @db.VarChar(16)
+  current_round                                                             Int                   @default(0)
+  max_rounds                                                                Int                   @default(10)
+  countdown_seconds                                                         Int                   @default(60)
+  object_id                                                                 BigInt?
+  artifact_iso3                                                             String?               @db.VarChar(3)
+  artifact_begin_year                                                       Int?
+  artifact_end_year                                                         Int?
+  artifact_image_url                                                        String?
+  artifact_title                                                            String?
+  round_ends_at                                                             DateTime?             @db.Timestamptz(6)
+  last_round_reveal                                                         Json?
+  created_at                                                                DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at                                                                DateTime              @updatedAt @db.Timestamptz(6)
+  max_health                                                                Int                   @default(25000)
+  revision                                                                  Int                   @default(0)
+  round_starts_at                                                           DateTime?             @db.Timestamptz(6)
+  round_history                                                             Json?
+  room_id                                                                   String?               @db.Uuid
+  session_number                                                            Int?
+  completed_at                                                              DateTime?             @db.Timestamptz(6)
+  multiplayer_rooms_multiplayer_games_room_idTomultiplayer_rooms            multiplayer_rooms?    @relation("multiplayer_games_room_idTomultiplayer_rooms", fields: [room_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  guesses                                                                   multiplayer_guesses[]
+  players                                                                   multiplayer_players[]
+  multiplayer_rooms_multiplayer_rooms_current_session_idTomultiplayer_games multiplayer_rooms?    @relation("multiplayer_rooms_current_session_idTomultiplayer_games")
+
+  @@unique([room_id, session_number])
 }
 
 model multiplayer_players {
-  id            String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  game_id       String                @db.Uuid
-  name          String                @db.VarChar(32)
-  health        Int                   @default(25000)
-  is_eliminated Boolean               @default(false)
-  created_at    DateTime              @default(now()) @db.Timestamptz(6)
-  guesses       multiplayer_guesses[]
-  game          multiplayer_games     @relation(fields: [game_id], references: [id])
+  id                       String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  game_id                  String                    @db.Uuid
+  name                     String                    @db.VarChar(32)
+  health                   Int                       @default(25000)
+  is_eliminated            Boolean                   @default(false)
+  created_at               DateTime                  @default(now()) @db.Timestamptz(6)
+  member_id                String?                   @db.Uuid
+  final_placement          Int?
+  elimination_round        Int?
+  cumulative_score         Int                       @default(0)
+  completed_at             DateTime?                 @db.Timestamptz(6)
+  guesses                  multiplayer_guesses[]
+  game                     multiplayer_games         @relation(fields: [game_id], references: [id])
+  multiplayer_room_members multiplayer_room_members? @relation(fields: [member_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([game_id, member_id])
 }
 
 model multiplayer_guesses {
@@ -214,7 +229,7 @@ model multiplayer_guesses {
 model party_games {
   id                                                    String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   created_at                                            DateTime        @default(now()) @db.Timestamptz(6)
-  status                                                String?         @default("'waiting'::character varying") @db.VarChar
+  status                                                String?         @default("waiting")
   object_id                                             BigInt?
   object_link                                           String?
   guess_player                                          String?         @db.Uuid
@@ -223,6 +238,7 @@ model party_games {
   archeologist                                          String?         @db.Uuid
   guesser                                               String?         @db.Uuid
   number_players                                        BigInt?         @default(3)
+  revision                                              Int?            @default(0)
   party_players_party_games_archeologistToparty_players party_players?  @relation("party_games_archeologistToparty_players", fields: [archeologist], references: [id], onDelete: NoAction, onUpdate: NoAction)
   party_players_party_games_guess_playerToparty_players party_players?  @relation("party_games_guess_playerToparty_players", fields: [guess_player], references: [id], onDelete: NoAction, onUpdate: NoAction)
   party_players_party_games_guesserToparty_players      party_players?  @relation("party_games_guesserToparty_players", fields: [guesser], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -238,6 +254,7 @@ model party_players {
   is_imposter                                         Boolean?
   is_guesser                                          Boolean?
   game_id                                             String?       @db.Uuid
+  is_host                                             Boolean?      @default(false)
   party_games_party_games_archeologistToparty_players party_games[] @relation("party_games_archeologistToparty_players")
   party_games_party_games_guess_playerToparty_players party_games[] @relation("party_games_guess_playerToparty_players")
   party_games_party_games_guesserToparty_players      party_games[] @relation("party_games_guesserToparty_players")
@@ -251,4 +268,37 @@ model description {
   game_id     String?  @db.Uuid
   player_id   String?  @db.Uuid
   description String?
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model multiplayer_room_members {
+  id                                                                           String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  room_id                                                                      String                @db.Uuid
+  name                                                                         String                @db.VarChar(32)
+  credential_hash                                                              String?               @unique @db.VarChar(64)
+  joined_at                                                                    DateTime              @default(now()) @db.Timestamptz(6)
+  left_at                                                                      DateTime?             @db.Timestamptz(6)
+  multiplayer_players                                                          multiplayer_players[]
+  multiplayer_rooms_multiplayer_room_members_room_idTomultiplayer_rooms        multiplayer_rooms     @relation("multiplayer_room_members_room_idTomultiplayer_rooms", fields: [room_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  multiplayer_rooms_multiplayer_rooms_host_member_idTomultiplayer_room_members multiplayer_rooms[]   @relation("multiplayer_rooms_host_member_idTomultiplayer_room_members")
+
+  @@index([room_id, left_at, joined_at])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model multiplayer_rooms {
+  id                                                                                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status                                                                              String                     @default("waiting") @db.VarChar(16)
+  host_member_id                                                                      String?                    @db.Uuid
+  current_session_id                                                                  String?                    @unique @db.Uuid
+  revision                                                                            Int                        @default(0)
+  session_count                                                                       Int                        @default(0)
+  max_rounds                                                                          Int                        @default(10)
+  max_health                                                                          Int                        @default(25000)
+  countdown_seconds                                                                   Int                        @default(60)
+  created_at                                                                          DateTime                   @default(now()) @db.Timestamptz(6)
+  multiplayer_games_multiplayer_games_room_idTomultiplayer_rooms                      multiplayer_games[]        @relation("multiplayer_games_room_idTomultiplayer_rooms")
+  multiplayer_room_members_multiplayer_room_members_room_idTomultiplayer_rooms        multiplayer_room_members[] @relation("multiplayer_room_members_room_idTomultiplayer_rooms")
+  multiplayer_games_multiplayer_rooms_current_session_idTomultiplayer_games           multiplayer_games?         @relation("multiplayer_rooms_current_session_idTomultiplayer_games", fields: [current_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  multiplayer_room_members_multiplayer_rooms_host_member_idTomultiplayer_room_members multiplayer_room_members?  @relation("multiplayer_rooms_host_member_idTomultiplayer_room_members", fields: [host_member_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
