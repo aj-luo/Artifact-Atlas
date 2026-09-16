@@ -111,15 +111,15 @@ export class GameSession {
       if (!game) throw new GameSessionError('Game not found', 404);
       if (game.status !== 'waiting') throw new GameSessionError('Game has already started', 409);
 
-      const playerCount = await tx.multiplayer_players.count({ where: { game_id: game.id } });
+      const playerCount = await tx.party_players.count({ where: { game_id: game.id } });
       if (playerCount >= MAX_PLAYERS) {
         throw new GameSessionError(`Room is full (maximum ${MAX_PLAYERS} players)`, 409);
       }
 
-      const created = await tx.multiplayer_players.create({
+      const created = await tx.party_players.create({
         data: { game_id: game.id, name: trimmed },
       });
-      await tx.multiplayer_games.update({
+      await tx.party_games.update({
         where: { id: game.id },
         data: { revision: { increment: 1 } },
       });
@@ -138,10 +138,10 @@ export class GameSession {
   //     const game = await lockGame(tx, this.game.id);
   //     if (!game) throw new GameSessionError('Game not found', 404);
   //     if (game.status !== 'waiting') throw new GameSessionError('Game is not in waiting state', 409);
-  //     const playerCount = await tx.multiplayer_players.count({ where: { game_id: game.id } });
+  //     const playerCount = await tx.party_players.count({ where: { game_id: game.id } });
   //     if (playerCount < 2) throw new GameSessionError('Need at least 2 players to start', 400);
 
-  //     await tx.multiplayer_games.update({
+  //     await tx.party_games.update({
   //       where: { id: game.id },
   //       data: {
   //         status: 'active', current_round: 1,
