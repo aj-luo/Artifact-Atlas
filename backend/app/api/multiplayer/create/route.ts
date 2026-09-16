@@ -12,6 +12,8 @@ import { db } from '@/lib/db';
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({})) ?? {};
+    const autoAdvanceRounds = body.autoAdvanceRounds === undefined ? true : body.autoAdvanceRounds;
+    if (typeof autoAdvanceRounds !== 'boolean') return NextResponse.json({ error: 'autoAdvanceRounds must be a boolean' }, { status: 400 });
     const countdownSeconds = body.countdownSeconds === undefined ? 60 : body.countdownSeconds;
     if (!Number.isInteger(countdownSeconds) || countdownSeconds < 30 || countdownSeconds > 120) {
       return NextResponse.json({ error: 'Round duration must be an integer between 30 and 120 seconds' }, { status: 400 });
@@ -21,7 +23,7 @@ export async function POST(req: Request) {
     const maxHealth        = typeof body.maxHealth        === 'number' ? Math.min(Math.max(body.maxHealth, 5000), 20000)  : 25000;
 
     const game = await db.multiplayer_rooms.create({
-      data: { countdown_seconds: countdownSeconds, max_rounds: maxRounds, max_health: maxHealth },
+      data: { auto_advance_rounds: autoAdvanceRounds, countdown_seconds: countdownSeconds, max_rounds: maxRounds, max_health: maxHealth },
     });
     return NextResponse.json({ gameId: game.id, roomId: game.id }, { status: 201 });
   } catch (err) {

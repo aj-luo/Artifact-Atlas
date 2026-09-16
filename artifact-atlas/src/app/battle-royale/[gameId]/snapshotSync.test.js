@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getRoomPhase, estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, isResultsRevealPending, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { getRecoveryPollInterval, getRoomPhase, estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, isResultsRevealPending, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
 
 test('finished results share a reveal deadline across clock offsets and late arrivals', () => {
   const revealAt = Date.parse('2026-09-12T12:00:20.000Z');
@@ -80,4 +80,36 @@ test('one phase gates exact reveal, countdown, start, and cutoff boundaries', ()
   }
   assert.equal(getRoomPhase({ ...snapshot, resultsRevealAt: null }, 9999).phase, 'results');
   assert.equal(getRoomPhase({ ...snapshot, status: 'waiting' }, 20000).canGuess, false);
+});
+
+test('slow database work is not mistaken for clock skew at round start', () => {
+  const requestedAt = 10000;
+  const processingMs = 2000;
+  const receivedAt = requestedAt + processingMs + 100;
+  const serverOffset = 5000;
+  const serverTime = new Date(requestedAt + 50 + processingMs + serverOffset).toISOString();
+  assert.equal(estimateServerClockOffset(serverTime, requestedAt, receivedAt, processingMs), serverOffset);
+  assert.equal(estimateServerClockOffset(serverTime, requestedAt, receivedAt), serverOffset + 1000);
+  assert.ok(Number.isFinite(estimateServerClockOffset(serverTime, requestedAt, receivedAt, NaN)));
+});
+
+test('missed broadcasts recover promptly even when the channel reports subscribed', () => {
+  assert.equal(getRecoveryPollInterval('SUBSCRIBED', null, 'playing'), 5000);
+  for (const phase of ['waiting', 'countdown', 'results', 'syncing']) {
+    assert.equal(getRecoveryPollInterval('SUBSCRIBED', null, phase), 2000);
+  }
+  assert.equal(getRecoveryPollInterval('CHANNEL_ERROR', null, 'playing'), 2000);
+  assert.equal(getRecoveryPollInterval('SUBSCRIBED', 'Refresh failed', 'playing'), 2000);
+  assert.equal(getRecoveryPollInterval('SUBSCRIBED', null, 'finished'), 30000);
+});
+
+test('manual results stay visible and guesses stay disabled until the host starts the countdown', () => {
+  const now = Date.now();
+  const snapshot = { status: 'active', awaitingHost: true, resultsRevealAt: new Date(now + 1000).toISOString() };
+  assert.equal(getRoomPhase(snapshot, now).phase, 'syncing');
+  assert.equal(getRoomPhase(snapshot, now + 3600000).phase, 'results');
+  assert.equal(getRoomPhase(snapshot, now + 3600000).canGuess, false);
+  const started = { ...snapshot, awaitingHost: false, roundStartsAt: new Date(now + 5000).toISOString(), roundEndsAt: new Date(now + 65000).toISOString() };
+  assert.equal(getRoomPhase(started, now + 1000).phase, 'countdown');
+  assert.equal(getRoomPhase(started, now + 5000).canGuess, true);
 });

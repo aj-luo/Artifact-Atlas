@@ -166,6 +166,7 @@ model multiplayer_rooms {
   max_rounds         Int @default(10)
   max_health         Int @default(25000)
   countdown_seconds  Int @default(60)
+  auto_advance_rounds Boolean @default(true)
   created_at         DateTime @default(now()) @db.Timestamptz(6)
   members            multiplayer_room_members[]
   sessions           multiplayer_games[] @relation("RoomSessions")
@@ -191,6 +192,7 @@ model multiplayer_games {
   room_id             String? @db.Uuid
   session_number      Int?
   completed_at        DateTime? @db.Timestamptz(6)
+  awaiting_host       Boolean @default(false)
   results_reveal_at    DateTime? @db.Timestamptz(6)
   room                multiplayer_rooms? @relation("RoomSessions", fields: [room_id], references: [id])
   current_in_room     multiplayer_rooms? @relation("CurrentSession")

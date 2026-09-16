@@ -41,6 +41,7 @@ async function fresh() {
   await pg.exec(baseline);
   await pg.exec(migration);
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20260914000000_results_reveal/migration.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20260915000000_manual_round_advance/migration.sql'), 'utf8'));
   return { pg, db: postgresClient(pg) };
 }
 
@@ -342,5 +343,106 @@ test('concurrent final submissions apply damage and history exactly once', async
     assert.deepEqual(finished.players.map(p => [p.health, p.cumulativeScore]), [[1000, 100], [950, 50]]);
     assert.equal(await db.multiplayer_guesses.count({ where: { game_id: state.currentSessionId } }), 2);
     assert.equal((await s.roomStatus(room.id)).resultsRevealAt, finished.resultsRevealAt);
+  } finally { await pg.close(); }
+});
+
+test('room status uses one consistent read in the lobby, countdown, and playing phases', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const room = await db.multiplayer_rooms.create({ data: {} });
+    const host = await s.joinRoom(room.id, 'Host', '');
+    await s.joinRoom(room.id, 'Guest', '');
+    const query = db.$queryRaw;
+    let reads = 0;
+    db.$queryRaw = (...args) => { reads++; return query(...args); };
+    const check = async () => {
+      reads = 0;
+      const snapshot = await s.roomStatus(room.id);
+      assert.equal(reads, 1);
+      assert.ok(!JSON.stringify(snapshot).includes(host.credential));
+      assert.ok(!JSON.stringify(snapshot).includes('credential_hash'));
+      return snapshot;
+    };
+    assert.equal((await check()).status, 'waiting');
+    const started = await s.transitionRoom(room.id, 'start', host.credential, null);
+    assert.equal((await check()).roundStartsAt, started.roundStartsAt);
+    await openRound(db, started.currentSessionId);
+    const playing = await check();
+    const expected = (await s.GameSession.load(started.currentSessionId)).getStatus();
+    for (const key of Object.keys(expected)) {
+      if (key !== 'revision' && key !== 'serverTime') assert.deepEqual(playing[key], expected[key], key);
+    }
+    await rejected(s.roomSnapshot(randomUUID()), 404);
+  } finally { await pg.close(); }
+});
+
+test('broadcast reuses the prepared snapshot without publishing join credentials', async () => {
+  const { pg, db } = await fresh();
+  const originalFetch = global.fetch;
+  const oldUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  try {
+    const s = services(db);
+    const room = await db.multiplayer_rooms.create({ data: {} });
+    const joined = await s.joinRoom(room.id, 'Host', '');
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.test';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
+    let body;
+    global.fetch = async (_url, options) => { body = JSON.parse(options.body); return { ok: true }; };
+    db.$queryRaw = () => { throw new Error('Broadcast must not rebuild the snapshot'); };
+    await s.broadcastRoom(room.id, joined);
+    const { credential, memberId, ...publicSnapshot } = joined;
+    assert.deepEqual(body.messages[0].payload, publicSnapshot);
+    assert.equal(body.messages[0].topic, `room-${room.id}`);
+    assert.ok(!JSON.stringify(body).includes(credential));
+  } finally {
+    global.fetch = originalFetch;
+    if (oldUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
+    await pg.close();
+  }
+});
+
+test('manual rooms hold results until a host advances the expected round', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const room = await db.multiplayer_rooms.create({ data: { max_rounds: 2 } });
+    const host = await s.joinRoom(room.id, 'Host', '');
+    const guest = await s.joinRoom(room.id, 'Guest', '');
+    assert.equal(host.autoAdvanceRounds, true);
+    await rejected(s.transitionRoom(room.id, 'settings', guest.credential, null, undefined, { autoAdvanceRounds: false }), 403);
+    await rejected(s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: 'false' }), 400);
+    await s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: false });
+    let state = await s.transitionRoom(room.id, 'start', host.credential, null);
+    const id = state.currentSessionId;
+    await rejected(s.transitionRoom(room.id, 'settings', host.credential, id, undefined, { autoAdvanceRounds: true }), 409);
+    await openRound(db, id);
+    for (const player of state.players) await (await s.GameSession.load(id)).submitGuess(player.id, 'USA', 100, 1);
+    state = await s.roomStatus(room.id);
+    assert.equal(state.awaitingHost, true);
+    assert.equal(state.roundStartsAt, null);
+    assert.equal(state.roundEndsAt, null);
+    assert.equal(state.currentRound, 2);
+    const revision = state.revision;
+    await rejected((await s.GameSession.load(id)).submitGuess(state.players[0].id, 'USA', 100, 2), 409);
+    assert.equal(await (await s.GameSession.load(id)).resolveRoundIfNeeded(), false);
+    assert.equal((await s.roomStatus(room.id)).revision, revision);
+    await rejected(s.transitionRoom(room.id, 'next-round', guest.credential, id, undefined, { expectedRound: 2 }), 403);
+    await rejected(s.transitionRoom(room.id, 'next-round', host.credential, id, undefined, { expectedRound: 1 }), 409);
+    await db.multiplayer_games.update({ where: { id }, data: { results_reveal_at: new Date(Date.now() - 1000) } });
+    state = await s.transitionRoom(room.id, 'next-round', host.credential, id, undefined, { expectedRound: 2 });
+    assert.equal(state.awaitingHost, false);
+    assert.ok(Date.parse(state.roundStartsAt) > Date.parse(state.serverTime));
+    assert.equal(Date.parse(state.roundEndsAt) - Date.parse(state.roundStartsAt), 60000);
+    await rejected(s.transitionRoom(room.id, 'next-round', host.credential, id, undefined, { expectedRound: 2 }), 409);
+    await openRound(db, id);
+    for (const player of state.players) await (await s.GameSession.load(id)).submitGuess(player.id, 'USA', 100, 2);
+    state = await s.roomStatus(room.id);
+    assert.equal(state.status, 'finished');
+    assert.equal(state.awaitingHost, false);
+    state = await s.transitionRoom(room.id, 'reopen', host.credential, id);
+    assert.equal(state.autoAdvanceRounds, false);
   } finally { await pg.close(); }
 });

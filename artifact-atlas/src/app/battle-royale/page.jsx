@@ -10,6 +10,7 @@ import multiplayer from '../../assets/multiplayer.png';
 export default function BattleRoyaleLobby() {
   const router = useRouter();
   const [countdownSeconds, setCountdownSeconds] = useState(60);
+  const [autoAdvanceRounds, setAutoAdvanceRounds] = useState(true);
   const [maxRounds, setMaxRounds] = useState(10);
   const [maxHealth, setMaxHealth] = useState(10000);
   const [joinGameId, setJoinGameId] = useState('');
@@ -25,7 +26,7 @@ export default function BattleRoyaleLobby() {
       const res = await fetch('/api/multiplayer/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ countdownSeconds, maxRounds, maxHealth }),
+        body: JSON.stringify({ countdownSeconds, maxRounds, maxHealth, autoAdvanceRounds }),
       });
       if (!res.ok) throw new Error('Failed to create game');
       const data = await res.json();
@@ -127,6 +128,11 @@ export default function BattleRoyaleLobby() {
                   <label>Round duration: <span>{countdownSeconds}s</span></label>
                   <input type="range" min="30" max="120" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
                   <small>Everyone has this long to guess from the start of each round.</small>
+                </div>
+
+                <div className="br-input-group">
+                  <label><input type="checkbox" checked={autoAdvanceRounds} onChange={e => setAutoAdvanceRounds(e.target.checked)} /> Auto-advance rounds</label>
+                  <small>Turn off to let the host start each next round after reviewing results.</small>
                 </div>
 
                 <button className="br-btn br-btn-primary" onClick={handleCreateGame} disabled={isCreating}>

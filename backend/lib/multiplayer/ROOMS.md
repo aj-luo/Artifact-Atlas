@@ -13,7 +13,7 @@ Apply `20260913000000_multiplayer_rooms` before deploying the new backend and fr
 
 Joining returns `memberId` and a private `credential`. Store these in browser localStorage under `br_member_<roomId>`. Authenticated mutations use `Authorization: Bearer <credential>`. Start/reopen/leave/remove require `expectedSessionId`, explicitly null before the first start. Remove also requires `memberId`. Repeated reopen requests are harmless; repeated starts with an obsolete session return 409. The legacy join/start paths delegate to these authenticated room actions. Guess requests still use `/api/multiplayer/:sessionId/guess`, now require the credential and `roundNumber`, and cannot authorize another member's participation. Session status remains available through the existing endpoint. These authentication requirements deliberately break old clients that used public player IDs as credentials.
 
-The stable realtime channel is `room-<roomId>`, event `room_update`. The migration adds the room table to the Supabase publication if it exists. The frontend subscribes to room-row changes and retains polling, deadline resolution, and reconnect recovery. Room revisions advance via a database trigger for session mutations and explicitly for membership/transitions. All writers lock room before session. Snapshots use repeatable-read transactions so a new revision cannot carry a mixture of old and new data.
+The stable realtime channel is `room-<roomId>`, event `room_update`. The migration adds the room table to the Supabase publication if it exists. The frontend subscribes to room-row changes and retains polling, deadline resolution, and reconnect recovery. Room revisions advance via a database trigger for session mutations and explicitly for membership/transitions. All writers lock room before session. Room snapshots use one SQL statement, so the revision, roster, session, and guesses share one PostgreSQL snapshot without separate network round trips. Status requests load the resolution service only at a deadline, for legacy missing deadlines, or when everyone has guessed. Mutation broadcasts reuse the response snapshot with private join identity fields removed. Clients poll every five seconds during play, every two seconds during transitions or recovery, and every 30 seconds after results while realtime is healthy.
 
 Legacy identity provisioning
 
@@ -28,3 +28,15 @@ Legacy placements are reconstructed only when survival order is known. Unknown e
 Validation
 
 Run `npm run test:rooms` in backend, `npx tsc --noEmit` in backend, `node --test snapshotSync.test.js` from `artifact-atlas/src/app/battle-royale/[gameId]`, and `npm run build` in both applications. The room suite uses isolated PGlite PostgreSQL databases and a small Prisma-shaped transport adapter to execute the production services. It tests migration fixtures, rematches, concurrent transition requests, capacity, credentials, stale guesses, host transfer, finalized statistics, ties, and transaction rollback. PGlite serializes transactions on one connection; multi-connection PostgreSQL lock contention and browser/Supabase delivery still require integration testing in the deployment environment.
+
+Rooms support `autoAdvanceRounds` (default `true`). Apply the additive
+`20260915000000_manual_round_advance` migration and regenerate Prisma before running
+this version. Creation accepts the boolean; the host can change it in a waiting
+lobby with `POST /api/rooms/:roomId/settings` and `{ expectedSessionId, autoAdvanceRounds }`.
+The setting persists across rematches. With automatic advancement disabled, a
+resolved non-final round sets `awaitingHost: true` with null round timestamps;
+status polling and guesses cannot start that round. After results reveal, the host
+uses `POST /api/rooms/:roomId/next-round` with `{ expectedSessionId, expectedRound }`
+(the snapshot's `currentRound`) to schedule a five-second countdown. Session/round
+checks and room/session locks reject stale or duplicate actions. Final results
+still finish the session immediately.
