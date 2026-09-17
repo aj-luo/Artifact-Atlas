@@ -55,6 +55,7 @@ export interface GameStatusResponse {
   roundStartsAt: string | null;
   roundEndsAt: string | null;
   resultsRevealAt: string | null;
+  awaitingHost: boolean;
   players: PlayerStatus[];
   lastRoundReveal: LastRoundReveal | null;
   roundHistory: LastRoundReveal[];
@@ -100,7 +101,7 @@ function roundDuration(seconds: number): number {
 }
 
 async function initializeRoundWindow(tx: Transaction, game: multiplayer_games, now: Date): Promise<multiplayer_games> {
-  if (game.status !== 'active' || game.round_ends_at) return game;
+  if (game.status !== 'active' || game.awaiting_host || game.round_ends_at) return game;
   const startsAt = new Date(Math.max(now.getTime(), game.round_starts_at?.getTime() ?? 0));
   return tx.multiplayer_games.update({
     where: { id: game.id },
@@ -174,6 +175,7 @@ export class GameSession {
         throw new GameSessionError('Round changed while the guess was being scored; please try again', 409);
       }
 
+      if (game.awaiting_host) throw new GameSessionError('Waiting for the host to start the next round', 409);
       const now = await databaseNow(tx);
       game = await initializeRoundWindow(tx, game, now);
       if (game.round_starts_at && now < game.round_starts_at) {
@@ -224,12 +226,12 @@ export class GameSession {
   }
 
   async resolveRoundIfNeeded(): Promise<boolean> {
-    if (this.game.status !== 'active') return false;
+    if (this.game.status !== 'active' || this.game.awaiting_host) return false;
     let initialized = false;
     if (!this.game.round_ends_at) {
       initialized = await db.$transaction(async (tx) => {
         const game = await lockGame(tx, this.game.id);
-        if (!game || game.status !== 'active' || game.round_ends_at) return false;
+        if (!game || game.status !== 'active' || game.awaiting_host || game.round_ends_at) return false;
         await initializeRoundWindow(tx, game, await databaseNow(tx));
         return true;
       });
@@ -258,7 +260,7 @@ export class GameSession {
     now: Date,
     nextArtifact: SelectedArtifact | null,
   ): Promise<boolean> {
-    if (game.status !== 'active' || (game.round_starts_at && now < game.round_starts_at)) return false;
+    if (game.status !== 'active' || game.awaiting_host || (game.round_starts_at && now < game.round_starts_at)) return false;
     const [guesses, players] = await Promise.all([
       tx.multiplayer_guesses.findMany({
         where: { game_id: game.id, round_number: game.current_round },
@@ -351,17 +353,20 @@ export class GameSession {
         },
       });
     } else {
+      const room = game.room_id ? await tx.multiplayer_rooms.findUnique({ where: { id: game.room_id } }) : null;
+      const awaitingHost = room?.auto_advance_rounds === false;
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
           current_round: game.current_round + 1,
+          awaiting_host: awaitingHost,
           results_reveal_at: revealAt,
           object_id: nextArtifact!.objectId, artifact_iso3: nextArtifact!.iso3,
           artifact_begin_year: nextArtifact!.beginYear, artifact_end_year: nextArtifact!.endYear,
           artifact_image_url: nextArtifact!.imageUrl, artifact_title: nextArtifact!.title,
           countdown_seconds: roundDuration(game.countdown_seconds),
-          round_ends_at: new Date(revealAt.getTime() + 20_000 + roundDuration(game.countdown_seconds) * 1000),
-          round_starts_at: new Date(revealAt.getTime() + 20_000),
+          round_ends_at: awaitingHost ? null : new Date(revealAt.getTime() + 20_000 + roundDuration(game.countdown_seconds) * 1000),
+          round_starts_at: awaitingHost ? null : new Date(revealAt.getTime() + 20_000),
           last_round_reveal: reveal as unknown as Prisma.InputJsonValue,
           round_history: roundHistory,
           revision: { increment: 2 },
@@ -395,6 +400,7 @@ export class GameSession {
       roundStartsAt: this.game.round_starts_at?.toISOString() ?? null,
       roundEndsAt: this.game.round_ends_at?.toISOString() ?? null,
       resultsRevealAt: this.game.results_reveal_at?.toISOString() ?? null,
+      awaitingHost: this.game.awaiting_host,
       players: players.map((player) => ({
         id: player.id, memberId: player.member_id, name: player.name, health: player.health,
         finalPlacement: player.final_placement, cumulativeScore: player.cumulative_score,
