@@ -179,6 +179,7 @@ model multiplayer_games {
   room_id                                                                   String?               @db.Uuid
   session_number                                                            Int?
   completed_at                                                              DateTime?             @db.Timestamptz(6)
+  results_reveal_at                                                         DateTime?             @db.Timestamptz(6)
   multiplayer_rooms_multiplayer_games_room_idTomultiplayer_rooms            multiplayer_rooms?    @relation("multiplayer_games_room_idTomultiplayer_rooms", fields: [room_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   guesses                                                                   multiplayer_guesses[]
   players                                                                   multiplayer_players[]
@@ -237,7 +238,7 @@ model party_games {
   countdown_minutes                                     Int?
   archeologist                                          String?         @db.Uuid
   guesser                                               String?         @db.Uuid
-  number_players                                        BigInt?         @default(3)
+  number_players                                        Int?            @db.SmallInt
   revision                                              Int?            @default(0)
   party_players_party_games_archeologistToparty_players party_players?  @relation("party_games_archeologistToparty_players", fields: [archeologist], references: [id], onDelete: NoAction, onUpdate: NoAction)
   party_players_party_games_guess_playerToparty_players party_players?  @relation("party_games_guess_playerToparty_players", fields: [guess_player], references: [id], onDelete: NoAction, onUpdate: NoAction)
