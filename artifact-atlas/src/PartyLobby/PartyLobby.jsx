@@ -49,7 +49,7 @@ function PartyLobby({ setCurrentView, setGameId }) {
         
         // Persist local player ID if returned
         if (data.playerId) {
-            localStorage.setItem('playerId', data.playerId);
+            localStorage.setItem(`party_player_${data.gameId}`, data.playerId);
         }
     };
 
