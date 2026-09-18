@@ -1,7 +1,7 @@
 import styles from './JoinLobby.module.css';
 import { useState } from 'react';
 
-function JoinLobby({ setCurrentView }) {
+function JoinLobby({ setCurrentView, setGameId }) {
     const [lobbyCode, setLobbyCode] = useState('');
     const [nickname, setNickname] = useState('');
     const [isJoining, setIsJoining] = useState(false);
@@ -36,6 +36,7 @@ function JoinLobby({ setCurrentView }) {
         }
 
         console.log('Joined Lobby successfully:', data);
+        setGameId(lobbyCode);
         setCurrentView('partywaitingroom');
     } catch (error) {
         console.error('Error joining lobby:', error);
