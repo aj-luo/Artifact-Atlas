@@ -13,11 +13,17 @@ function failure(error: unknown) {
   return NextResponse.json({ error: 'Unable to load or update room' }, { status: 500 });
 }
 export async function GET(req: Request, { params }: Params) {
+  const requestedAt = performance.now();
   try {
     const { roomId, action } = await params;
     if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
-    if (action === 'status') return NextResponse.json(await roomStatus(roomId,
-      snapshot => after(() => broadcastRoom(roomId, snapshot))));
+    if (action === 'status') {
+      const snapshot = await roomStatus(roomId,
+        snapshot => after(() => broadcastRoom(roomId, snapshot)));
+      return NextResponse.json(snapshot, { headers: {
+        'X-Room-Processing-Ms': String(performance.now() - requestedAt),
+      } });
+    }
     if (!await db.multiplayer_rooms.findUnique({ where: { id: roomId }, select: { id: true } })) throw new GameSessionError('Room not found', 404);
     if (action === 'statistics') return NextResponse.json({ members: await memberStatistics(roomId) });
     if (action === 'sessions') return NextResponse.json(await sessionHistory(roomId, new URL(req.url).searchParams));
@@ -28,12 +34,12 @@ export async function POST(req: Request, { params }: Params) {
   try {
     const { roomId, action } = await params;
     if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
-    if (!['join', 'start', 'reopen', 'leave', 'remove'].includes(action)) throw new GameSessionError('Not found', 404);
+    if (!['join', 'start', 'reopen', 'leave', 'remove', 'settings', 'next-round'].includes(action)) throw new GameSessionError('Not found', 404);
     const body = await req.json();
     if (!body || typeof body !== 'object') throw new GameSessionError('Invalid request');
     const snapshot = action === 'join' ? await joinRoom(roomId, body.name, credential(req))
-      : await transitionRoom(roomId, action, credential(req), body.expectedSessionId, body.memberId);
-    after(() => broadcastRoom(roomId));
+      : await transitionRoom(roomId, action, credential(req), body.expectedSessionId, body.memberId, body);
+    after(() => broadcastRoom(roomId, snapshot));
     return NextResponse.json(snapshot);
   } catch (error) { return failure(error); }
 }

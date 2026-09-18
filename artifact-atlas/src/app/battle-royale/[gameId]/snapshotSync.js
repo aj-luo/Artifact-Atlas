@@ -13,9 +13,12 @@ export function getRoundTimeRemaining(roundStartsAt, roundEndsAt, serverNow) {
   return Math.max(0, Math.ceil((new Date(roundEndsAt).getTime() - serverNow) / 1000));
 }
 
-export function estimateServerClockOffset(serverTime, requestedAt, receivedAt) {
-  const midpoint = requestedAt + ((receivedAt - requestedAt) / 2);
-  return new Date(serverTime).getTime() - midpoint;
+export function estimateServerClockOffset(serverTime, requestedAt, receivedAt, processingMs = 0) {
+  const roundTrip = Math.max(0, receivedAt - requestedAt);
+  const processing = Number.isFinite(processingMs) ? Math.min(roundTrip, Math.max(0, processingMs)) : 0;
+  // serverTime is sampled near response creation, after database work. Remove
+  // that processing time before estimating the response's network travel time.
+  return Date.parse(serverTime) - (receivedAt - (roundTrip - processing) / 2);
 }
 
 export function getIntermissionPhase(roundStartsAt, serverNow) {
@@ -39,9 +42,16 @@ export function getRoomPhase(snapshot, serverNow) {
   const base = { countdown: null, timeRemaining: null, canGuess: false };
   if (isResultsRevealPending(snapshot, serverNow)) return { ...base, phase: 'syncing', revealPending: true };
   if (snapshot?.status !== 'active') return { ...base, phase: snapshot?.status ?? 'loading', revealPending: false };
+  if (snapshot.awaitingHost) return { ...base, phase: 'results', revealPending: false };
   const intermission = getIntermissionPhase(snapshot.roundStartsAt, serverNow);
   if (intermission.phase !== 'none') return { ...base, ...intermission, revealPending: false };
   const timeRemaining = getRoundTimeRemaining(snapshot.roundStartsAt, snapshot.roundEndsAt, serverNow);
   return { ...base, phase: timeRemaining === 0 ? 'syncing' : 'playing', timeRemaining,
     canGuess: timeRemaining !== 0, revealPending: false };
+}
+
+export function getRecoveryPollInterval(channelStatus, statusError, phase) {
+  if (channelStatus !== 'SUBSCRIBED' || statusError) return 2000;
+  if (phase === 'finished') return 30000;
+  return phase === 'playing' ? 5000 : 2000;
 }
