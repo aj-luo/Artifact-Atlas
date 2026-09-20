@@ -8,7 +8,7 @@ let _admin: SupabaseClient | null = null;
 export function getSupabaseAdmin(): SupabaseClient {
   if (!_admin) {
     _admin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_URL!.trim().replace(/^["']+|["']+$/g, '').trim().replace(/\/+$/, ''),
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
       { auth: { persistSession: false, autoRefreshToken: false } },
     );
