@@ -357,11 +357,11 @@ export default function BattleRoyaleRoom() {
           </ul>
         </div>
 
-        <div className="br-input-group">
+        {typeof gameState.autoAdvanceRounds === 'boolean' && <div className="br-input-group">
           <label><input type="checkbox" checked={gameState.autoAdvanceRounds ?? true} disabled={!isHost || isStarting}
             onChange={e => roomAction('settings', undefined, { autoAdvanceRounds: e.target.checked })} /> Auto-advance rounds</label>
           <small>{gameState.autoAdvanceRounds === false ? 'The host starts each next round after results.' : 'The next round starts automatically after results.'}</small>
-        </div>
+        </div>}
 
         {gameState.players.length >= 2
           ? isHost

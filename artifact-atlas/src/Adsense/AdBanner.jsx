@@ -41,7 +41,7 @@ export const AdBanner = ({ dataAdSlot, adStyle }) => {
       ref={adRef}
       className="adsbygoogle"
       style={adStyle || { display: 'block' }}
-      data-ad-client="ca-pub-9278425510747491"
+      data-ad-client="ca-pub-4634976137290206"
       data-ad-slot={dataAdSlot}
     ></ins>
   )
