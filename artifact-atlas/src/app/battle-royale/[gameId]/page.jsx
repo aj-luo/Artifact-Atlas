@@ -8,7 +8,7 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
-import { estimateServerClockOffset, getRoomPhase, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { estimateServerClockOffset, getRecoveryPollInterval, getRoomPhase, shouldApplyRoomSnapshot } from './snapshotSync.js';
 import '../battleRoyale.css';
 import RoundResultCard from '../RoundResultCard';
 import RoomHistory from '../RoomHistory';
@@ -52,6 +52,7 @@ export default function BattleRoyaleRoom() {
   submissionScopeRef.current = submissionScope;
   const [isStarting, setIsStarting] = useState(false);
   const [startError, setStartError] = useState(null);
+  const [statusError, setStatusError] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   const debounceRef = useRef(null);
@@ -71,6 +72,7 @@ export default function BattleRoyaleRoom() {
     bestClockRoundTripRef.current = Infinity;
     serverClockOffsetRef.current = 0;
     setGameState(null);
+    setStatusError(null);
     try {
       const saved = JSON.parse(localStorage.getItem(`br_member_${gameId}`) ?? 'null');
       setIdentity(saved);
@@ -90,7 +92,7 @@ export default function BattleRoyaleRoom() {
 
   // All state sources use the same monotonic revision gate. serverTime also
   // aligns the countdown without trusting the device's wall clock.
-  const applySnapshot = useCallback((data, requestedAt = null, receivedAt = null) => {
+  const applySnapshot = useCallback((data, requestedAt = null, receivedAt = null, processingMs = 0) => {
     if (!shouldApplyRoomSnapshot(latestRevisionRef.current, data, roomIdRef.current)) return false;
 
     latestRevisionRef.current = data.revision;
@@ -101,8 +103,9 @@ export default function BattleRoyaleRoom() {
     if (data.serverTime && requestedAt != null && receivedAt != null
       && receivedAt - requestedAt <= bestClockRoundTripRef.current) {
       bestClockRoundTripRef.current = receivedAt - requestedAt;
-      serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt);
+      serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt, processingMs);
     }
+    setStatusError(null);
     setGameState(data);
     return true;
   }, [gameId]);
@@ -127,15 +130,21 @@ export default function BattleRoyaleRoom() {
     statusRequestRef.current = request;
     do {
       request.queued = false;
+      const requestedRevision = latestRevisionRef.current;
       try {
         const requestedAt = Date.now();
         const res = await fetch(`/api/rooms/${gameId}/status`);
         if (res.ok) {
           const data = await res.json();
-          applySnapshot(data, requestedAt, Date.now());
-        } else if (roomIdRef.current === gameId) { setStartError((await res.json()).error ?? 'Unable to load room'); }
+          applySnapshot(data, requestedAt, Date.now(), Number(res.headers.get('X-Room-Processing-Ms') ?? 0));
+        } else if (roomIdRef.current === gameId && latestRevisionRef.current === requestedRevision) {
+          setStatusError('Unable to refresh room. Reconnecting…');
+        }
       } catch (err) {
         console.error('Status fetch error', err);
+        if (roomIdRef.current === gameId && latestRevisionRef.current === requestedRevision) {
+          setStatusError('Unable to refresh room. Reconnecting…');
+        }
       }
     } while (request.queued && roomIdRef.current === gameId);
     if (statusRequestRef.current === request) statusRequestRef.current = null;
@@ -160,7 +169,10 @@ export default function BattleRoyaleRoom() {
       })
       // postgres_changes: safety fallback for any broadcast misses
       .on('postgres_changes', { event: '*', schema: 'public', table: 'multiplayer_rooms', filter: `id=eq.${gameId}` }, debouncedFetchStatus)
-      .subscribe((status) => setChannelStatus(status));
+      .subscribe((status) => {
+        setChannelStatus(status);
+        if (status === 'SUBSCRIBED') void fetchStatus();
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -168,11 +180,11 @@ export default function BattleRoyaleRoom() {
     };
   }, [gameId, fetchStatus, debouncedFetchStatus, applySnapshot]);
 
-  // Healthy polling is only a slow recovery net; degraded realtime stays eager.
+  // Recover missed broadcasts within five seconds; transitions and errors stay eager.
   useEffect(() => {
-    const interval = setInterval(fetchStatus, channelStatus === 'SUBSCRIBED' ? 30000 : 2000);
+    const interval = setInterval(fetchStatus, getRecoveryPollInterval(channelStatus, statusError, phase.phase));
     return () => clearInterval(interval);
-  }, [channelStatus, fetchStatus]);
+  }, [channelStatus, statusError, phase.phase, fetchStatus]);
 
   // Recover immediately after a disconnected device or background tab returns.
   useEffect(() => {
@@ -227,13 +239,13 @@ export default function BattleRoyaleRoom() {
     setIsJoining(false);
   };
 
-  const roomAction = async (action, targetMemberId) => {
+  const roomAction = async (action, targetMemberId, settings = {}) => {
     setIsStarting(true);
     setStartError(null);
     try {
       const res = await fetch(`/api/rooms/${gameId}/${action}`, {
         method: 'POST', headers: authHeaders,
-        body: JSON.stringify({ expectedSessionId: gameState.currentSessionId, memberId: targetMemberId }),
+        body: JSON.stringify({ expectedSessionId: gameState.currentSessionId, memberId: targetMemberId, expectedRound: gameState.currentRound, ...settings }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Unable to update room');
@@ -345,6 +357,12 @@ export default function BattleRoyaleRoom() {
           </ul>
         </div>
 
+        <div className="br-input-group">
+          <label><input type="checkbox" checked={gameState.autoAdvanceRounds ?? true} disabled={!isHost || isStarting}
+            onChange={e => roomAction('settings', undefined, { autoAdvanceRounds: e.target.checked })} /> Auto-advance rounds</label>
+          <small>{gameState.autoAdvanceRounds === false ? 'The host starts each next round after results.' : 'The next round starts automatically after results.'}</small>
+        </div>
+
         {gameState.players.length >= 2
           ? isHost
             ? (
@@ -386,6 +404,11 @@ export default function BattleRoyaleRoom() {
           {intermission.phase === 'results' && gameState.lastRoundReveal ? (
             <div className="br-round-results">
               <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
+              {gameState.awaitingHost && (isHost
+                ? <button className="br-btn br-btn-primary" disabled={isStarting} onClick={() => roomAction('next-round')}>
+                    {isStarting ? 'STARTING…' : 'NEXT ROUND'}
+                  </button>
+                : <p className="br-waiting-msg">Waiting for the host to start the next round…</p>)}
             </div>
           ) : <>
           {/* Artifact pane */}
@@ -520,7 +543,7 @@ export default function BattleRoyaleRoom() {
   if (!gameState) {
     return (
       <div className="br-page">
-        <div className="br-loading">{startError ?? 'Loading Battle Royale…'}</div>
+        <div className="br-loading">{statusError ?? startError ?? 'Loading Battle Royale…'}</div>
       </div>
     );
   }
@@ -530,7 +553,8 @@ export default function BattleRoyaleRoom() {
       <div className="br-page">
         <div className="br-card br-join-card">
           <h2>Join Room</h2>
-          {startError && <p className="br-error" role="alert">{startError}</p>}
+          {statusError && <p className="br-error" role="status">{statusError}</p>}
+      {startError && <p className="br-error" role="alert">{startError}</p>}
           <p>Pick a nickname to enter the lobby.</p>
           <form onSubmit={handleJoin} className="br-join-form">
             <input
@@ -554,6 +578,7 @@ export default function BattleRoyaleRoom() {
 
   return (
     <div className="br-page">
+      {statusError && <p className="br-error" role="status">{statusError}</p>}
       {startError && <p className="br-error" role="alert">{startError}</p>}
       {gameState.status === 'waiting'  && renderLobby()}
       {gameState.status === 'active' && (phase.phase === 'syncing'

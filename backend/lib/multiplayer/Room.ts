@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { Prisma, type multiplayer_rooms } from '@prisma/client';
 import { db } from '@/lib/db';
 import { pickRandomArtifact } from '@/lib/artifactSelector';
+import { readRoomSnapshot } from './roomSnapshot';
 import { GameSession, GameSessionError, MAX_PLAYERS, databaseNow } from './GameSession';
 
 type Tx = Prisma.TransactionClient;
@@ -28,38 +29,24 @@ export async function authenticate(tx: Tx, roomId: string, token: string, active
 
 export async function roomSnapshot(roomId: string) {
   if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
-  // The revision and all associated rows must come from the same database snapshot.
-  return db.$transaction(async tx => {
-    const room = await tx.multiplayer_rooms.findUnique({ where: { id: roomId } });
-    if (!room) throw new GameSessionError('Room not found', 404);
-    const members = await tx.multiplayer_room_members.findMany({ where: { room_id: roomId, left_at: null }, orderBy: [{ joined_at: 'asc' }, { id: 'asc' }] });
-    const session = room.current_session_id ? await GameSession.load(room.current_session_id, tx) : null;
-    const state = session?.getStatus();
-    return {
-      ...state, roomId, gameId: room.current_session_id, currentSessionId: room.current_session_id,
-      sessionNumber: room.session_count, revision: room.revision, serverTime: (await databaseNow(tx)).toISOString(),
-      status: room.status, hostMemberId: room.host_member_id,
-      hostId: room.status === 'waiting' ? room.host_member_id : state?.players.find(p => p.memberId === room.host_member_id)?.id ?? null,
-      maxRounds: room.max_rounds, maxHealth: room.max_health, countdownSeconds: room.countdown_seconds,
-      members: members.map(m => ({ id: m.id, name: m.name })),
-      players: room.status === 'waiting' ? members.map(m => ({ id: m.id, memberId: m.id, name: m.name, health: room.max_health, isEliminated: false })) : state?.players ?? [],
-      ...(room.status === 'waiting' ? { currentRound: 0, resultsRevealAt: null, roundStartsAt: null, roundEndsAt: null, currentArtifact: null, lastRoundReveal: null, roundHistory: [] } : {}),
-    };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  return readRoomSnapshot(roomId);
 }
 
 export async function roomStatus(roomId: string, onResolved?: (snapshot: Awaited<ReturnType<typeof roomSnapshot>>) => void) {
-  if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
-  const room = await db.multiplayer_rooms.findUnique({ where: { id: roomId } });
-  if (!room) throw new GameSessionError('Room not found', 404);
-  let resolved = false;
-  if (room.status === 'active' && room.current_session_id) {
-    const session = await GameSession.load(room.current_session_id);
-    resolved = await session?.resolveRoundIfNeeded() ?? false;
-  }
   const snapshot = await roomSnapshot(roomId);
-  if (resolved) onResolved?.(snapshot);
-  return snapshot;
+  if (snapshot.status !== 'active' || snapshot.awaitingHost || !snapshot.currentSessionId) return snapshot;
+  const now = Date.parse(snapshot.serverTime);
+  if (snapshot.roundStartsAt && now < Date.parse(snapshot.roundStartsAt)) return snapshot;
+  const expired = !snapshot.roundEndsAt || now >= Date.parse(snapshot.roundEndsAt);
+  const allGuessed = snapshot.players.filter(p => !p.isEliminated).every(p => p.hasGuessedThisRound);
+  if (!expired && !allGuessed) return snapshot;
+
+  // Only resolution needs the session service and its transactional lock checks.
+  const session = await GameSession.load(snapshot.currentSessionId);
+  const resolved = await session?.resolveRoundIfNeeded() ?? false;
+  const current = await roomSnapshot(roomId);
+  if (resolved) onResolved?.(current);
+  return current;
 }
 
 export async function joinRoom(roomId: string, name: unknown, token: string) {
@@ -86,7 +73,7 @@ export async function joinRoom(roomId: string, name: unknown, token: string) {
   return { ...await roomSnapshot(roomId), ...result };
 }
 
-export async function transitionRoom(roomId: string, action: string, token: string, expectedSessionId: unknown, targetMemberId?: unknown) {
+export async function transitionRoom(roomId: string, action: string, token: string, expectedSessionId: unknown, targetMemberId?: unknown, options: { autoAdvanceRounds?: unknown; expectedRound?: unknown } = {}) {
   if (expectedSessionId !== null && !isUuid(expectedSessionId)) throw new GameSessionError('expectedSessionId is required');
   // Authorization is checked before potentially expensive artifact selection, then again under lock.
   const actor = await authenticate(db, roomId, token);
@@ -101,7 +88,26 @@ export async function transitionRoom(roomId: string, action: string, token: stri
     const member = await authenticate(tx, roomId, token);
     if (action !== 'leave' && room.host_member_id !== member.id) throw new GameSessionError('Only the host can do this', 403);
     if (room.current_session_id !== expectedSessionId) throw new GameSessionError('Session changed; refresh the room', 409);
-    if (action === 'reopen') {
+    if (action === 'settings') {
+      if (room.status !== 'waiting') throw new GameSessionError('Settings can only change in the lobby', 409);
+      if (typeof options.autoAdvanceRounds !== 'boolean') throw new GameSessionError('autoAdvanceRounds must be a boolean');
+      await tx.multiplayer_rooms.update({ where: { id: roomId }, data: {
+        auto_advance_rounds: options.autoAdvanceRounds, revision: { increment: 1 },
+      } });
+    } else if (action === 'next-round') {
+      if (room.status !== 'active' || !room.current_session_id) throw new GameSessionError('Session is not active', 409);
+      const games = await tx.$queryRaw<import('@prisma/client').multiplayer_games[]>`SELECT * FROM multiplayer_games WHERE id = ${room.current_session_id}::uuid FOR UPDATE`;
+      const game = games[0];
+      if (!Number.isInteger(options.expectedRound) || game.current_round !== options.expectedRound) throw new GameSessionError('Round changed; refresh the room', 409);
+      if (!game.awaiting_host) throw new GameSessionError('Round is not waiting for the host', 409);
+      const now = await databaseNow(tx);
+      if (game.results_reveal_at && now < game.results_reveal_at) throw new GameSessionError('Results are not ready yet', 409);
+      await tx.multiplayer_games.update({ where: { id: game.id }, data: {
+        awaiting_host: false, round_starts_at: new Date(now.getTime() + 5000),
+        round_ends_at: new Date(now.getTime() + 5000 + game.countdown_seconds * 1000),
+        revision: { increment: 1 },
+      } });
+    } else if (action === 'reopen') {
       if (room.status === 'waiting') return;
       if (room.status !== 'finished') throw new GameSessionError('Session is still running', 409);
       await tx.multiplayer_rooms.update({ where: { id: roomId }, data: { status: 'waiting', revision: { increment: 1 } } });
@@ -109,14 +115,18 @@ export async function transitionRoom(roomId: string, action: string, token: stri
       if (room.status !== 'waiting') throw new GameSessionError('Room is not waiting', 409);
       const members = await tx.multiplayer_room_members.findMany({ where: { room_id: roomId, left_at: null } });
       if (members.length < 2 || members.length > MAX_PLAYERS) throw new GameSessionError('Need 2–20 players to start');
-      const [{ now }] = await tx.$queryRaw<Array<{ now: Date }>>`SELECT clock_timestamp() AS now`;
       const game = await tx.multiplayer_games.create({ data: {
         room_id: roomId, session_number: room.session_count + 1, status: 'active', current_round: 1,
         max_health: room.max_health, max_rounds: room.max_rounds, countdown_seconds: room.countdown_seconds,
         object_id: artifact!.objectId, artifact_iso3: artifact!.iso3, artifact_begin_year: artifact!.beginYear,
         artifact_end_year: artifact!.endYear, artifact_image_url: artifact!.imageUrl, artifact_title: artifact!.title,
-        round_starts_at: new Date(now.getTime() + 5000), round_ends_at: new Date(now.getTime() + 5000 + room.countdown_seconds * 1000),
         players: { create: members.map(m => ({ member_id: m.id, name: m.name, health: room.max_health, created_at: m.joined_at })) },
+      } });
+      // Schedule after roster creation so database work cannot consume the countdown.
+      const now = await databaseNow(tx);
+      await tx.multiplayer_games.update({ where: { id: game.id }, data: {
+        round_starts_at: new Date(now.getTime() + 5000),
+        round_ends_at: new Date(now.getTime() + 5000 + room.countdown_seconds * 1000),
       } });
       await tx.multiplayer_rooms.update({ where: { id: roomId }, data: {
         current_session_id: game.id, session_count: { increment: 1 }, status: 'active', revision: { increment: 1 },
@@ -157,8 +167,11 @@ export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnTyp
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) return;
-    const payload = snapshot ?? await roomSnapshot(roomId);
+    if (!url || !key) throw new Error('Room broadcast environment is not configured');
+    // Join responses include private identity fields; never send them to the room.
+    const { credential: _credential, memberId: _memberId, ...payload } =
+      (snapshot ?? await roomSnapshot(roomId)) as Awaited<ReturnType<typeof roomSnapshot>>
+        & { credential?: string; memberId?: string };
     const response = await fetch(`${url}/realtime/v1/api/broadcast`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, apikey: key },
       body: JSON.stringify({ messages: [{ topic: `room-${roomId}`, event: 'room_update', payload }] }),
