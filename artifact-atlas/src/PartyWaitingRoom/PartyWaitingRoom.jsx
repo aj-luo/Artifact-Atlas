@@ -34,11 +34,18 @@ function PartyWaitingRoom({ setCurrentView, gameId }) {
         //Connect to game unique Realtime channel to listen for updates on players joining or leaving
         const channel = supabase.channel(`party_game:${gameId}`);
 
-        //Listen for live state broadcasts from the server when players join or leave the lobby
+        //Listen/receive live state broadcasts from the server when players join or leave the lobby
         channel.on('broadcast', {event: 'game-state'}, (payload) => {
             console.log('Realtime update received:', payload);
-            if (payload.payload?.players) {
-                setPlayers(payload.payload.players);
+            
+            const newPlayer = payload.payload?.player;
+            if (newPlayer) {
+                setPlayers((prevPlayers) => {
+                    const exists = prevPlayers.some((p) => p.id === newPlayer.id);
+                    if (exists) return prevPlayers; //avoid duplicate players
+
+                    return [...prevPlayers, newPlayer];
+                })
             }
         });
 
