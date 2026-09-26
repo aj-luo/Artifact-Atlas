@@ -12,6 +12,7 @@ import { estimateServerClockOffset, getRecoveryPollInterval, getRoomPhase, shoul
 import '../battleRoyale.css';
 import RoundResultCard from '../RoundResultCard';
 import RoomHistory from '../RoomHistory';
+import AutoAdvanceSwitch from '../AutoAdvanceSwitch';
 
 countries.registerLocale(enLocale);
 const omittedCountries = ['AS', 'IO', 'CW', 'GG', 'GU', 'IM', 'JE', 'PS', 'SX', 'VI', 'AX', 'XK'];
@@ -249,6 +250,10 @@ export default function BattleRoyaleRoom() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Unable to update room');
+      if (action === 'leave') {
+        router.push('/battle-royale');
+        return;
+      }
       applySnapshot(data);
     } catch (error) { setStartError(error.message); }
     finally { setIsStarting(false); }
@@ -358,8 +363,8 @@ export default function BattleRoyaleRoom() {
         </div>
 
         {typeof gameState.autoAdvanceRounds === 'boolean' && <div className="br-input-group">
-          <label><input type="checkbox" checked={gameState.autoAdvanceRounds ?? true} disabled={!isHost || isStarting}
-            onChange={e => roomAction('settings', undefined, { autoAdvanceRounds: e.target.checked })} /> Auto-advance rounds</label>
+          <AutoAdvanceSwitch checked={gameState.autoAdvanceRounds} disabled={!isHost || isStarting}
+            onChange={checked => roomAction('settings', undefined, { autoAdvanceRounds: checked })} />
           <small>{gameState.autoAdvanceRounds === false ? 'The host starts each next round after results.' : 'The next round starts automatically after results.'}</small>
         </div>}
 
@@ -394,7 +399,14 @@ export default function BattleRoyaleRoom() {
         <div className="br-top-bar">
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
-          <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
+          <div className="br-top-bar-actions">
+            <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
+            {intermission.phase === 'results' && gameState.lastRoundReveal && gameState.awaitingHost && isHost && (
+              <button className="br-history-button br-next-round-button" disabled={isStarting} onClick={() => roomAction('next-round')}>
+                {isStarting ? 'STARTING…' : 'NEXT ROUND'}
+              </button>
+            )}
+          </div>
           {!isIntermission && timeRemaining !== null && (
             <div className={`br-timer ${timeRemaining < 10 ? 'urgent' : ''}`}>{timeRemaining}s</div>
           )}
@@ -404,11 +416,9 @@ export default function BattleRoyaleRoom() {
           {intermission.phase === 'results' && gameState.lastRoundReveal ? (
             <div className="br-round-results">
               <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
-              {gameState.awaitingHost && (isHost
-                ? <button className="br-btn br-btn-primary" disabled={isStarting} onClick={() => roomAction('next-round')}>
-                    {isStarting ? 'STARTING…' : 'NEXT ROUND'}
-                  </button>
-                : <p className="br-waiting-msg">Waiting for the host to start the next round…</p>)}
+              {gameState.awaitingHost && !isHost && (
+                <p className="br-waiting-msg">Waiting for the host to start the next round…</p>
+              )}
             </div>
           ) : <>
           {/* Artifact pane */}
