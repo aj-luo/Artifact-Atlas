@@ -439,7 +439,7 @@ export default function BattleRoyaleRoom() {
             ) : !isIntermission && timeRemaining === 0 ? (
               <div className="br-waiting">Time’s up — loading results…</div>
             ) : me?.hasGuessedThisRound ? (
-              <div className="br-waiting">Guess submitted — waiting for others…</div>
+              <div className="br-waiting">{guessedCount === activePlayers.length ? 'Loading results…' : 'Guess submitted — waiting for others…'}</div>
             ) : (
               <fieldset className="br-guess-panel" disabled={isSubmitting} inert={isSubmitting} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
                 <p className="br-guess-prompt">Where is this artifact from?</p>

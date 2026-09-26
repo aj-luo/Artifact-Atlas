@@ -66,6 +66,11 @@ export interface GuessResult {
   roundResolved: boolean;
 }
 
+export interface FastGuessResult {
+  result: GuessResult;
+  timing: { scoringMs: number; transactionMs: number };
+}
+
 export class GameSessionError extends Error {
   constructor(
     message: string,
@@ -142,6 +147,58 @@ export class GameSession {
     this.players = updated.players;
     this.roundGuesses = updated.roundGuesses;
     this.serverTime = updated.serverTime;
+  }
+
+  static async submitAuthorizedGuess(
+    context: { roomId: string; memberId: string; game: multiplayer_games },
+    playerId: string, country: string, year: number, expectedRound: number,
+  ): Promise<FastGuessResult> {
+    const normalizedCountry = country.toUpperCase();
+    const sourceGame = context.game;
+    if (!sourceGame.artifact_iso3 || sourceGame.artifact_begin_year == null || sourceGame.artifact_end_year == null) {
+      throw new GameSessionError('Game artifact is not set', 500);
+    }
+    const scoreStarted = performance.now();
+    const score = await ScoringModule.calculateScore(normalizedCountry, sourceGame.artifact_iso3, year,
+      sourceGame.artifact_begin_year, sourceGame.artifact_end_year);
+    const scoringMs = performance.now() - scoreStarted;
+    const transactionStarted = performance.now();
+    const result = await db.$transaction(async (tx) => {
+      const game = await lockGame(tx, sourceGame.id);
+      if (!game) throw new GameSessionError('Game not found', 404);
+      const member = await tx.multiplayer_room_members.findFirst({
+        where: { id: context.memberId, room_id: context.roomId, left_at: null },
+      });
+      if (!member) throw new GameSessionError('Room membership is no longer active', 403);
+      if (game.room_id !== context.roomId || game.current_round !== expectedRound || game.status !== 'active') {
+        throw new GameSessionError('Session is no longer active or the round changed', 409);
+      }
+      if (game.current_round !== sourceGame.current_round || game.object_id !== sourceGame.object_id) {
+        throw new GameSessionError('Round changed while the guess was being scored; please try again', 409);
+      }
+      if (game.awaiting_host) throw new GameSessionError('Waiting for the host to start the next round', 409);
+      const now = await databaseNow(tx);
+      const initialized = await initializeRoundWindow(tx, game, now);
+      if (initialized.round_starts_at && now < initialized.round_starts_at) throw new GameSessionError('The next round has not started yet', 409);
+      if (initialized.round_ends_at && now >= initialized.round_ends_at) throw new GameSessionError('Round has ended; this guess was not accepted', 409, true);
+      const player = await tx.multiplayer_players.findFirst({ where: { id: playerId, game_id: game.id, member_id: context.memberId } });
+      if (!player) throw new GameSessionError('Player does not belong to this member', 403);
+      if (player.is_eliminated) throw new GameSessionError('Player is eliminated', 409);
+      const alreadyGuessed = await tx.multiplayer_guesses.findUnique({
+        where: { game_id_player_id_round_number: { game_id: game.id, player_id: playerId, round_number: game.current_round } },
+      });
+      if (alreadyGuessed) throw new GameSessionError('Already submitted a guess this round', 409);
+      await tx.multiplayer_guesses.create({ data: {
+        game_id: game.id, player_id: playerId, round_number: game.current_round,
+        country_guessed: normalizedCountry, year_guessed: year,
+        distance_km: score.distanceKm, years_away: score.yearsAway,
+        score_country: score.countryScore, score_year: score.yearScore,
+        total_score: score.totalScore, submitted_at: now,
+      } });
+      await tx.multiplayer_games.update({ where: { id: game.id }, data: { revision: { increment: 1 } } });
+      return { score, roundResolved: false };
+    });
+    return { result, timing: { scoringMs, transactionMs: performance.now() - transactionStarted } };
   }
 
   async submitGuess(playerId: string, country: string, year: number, expectedRound: number, refresh = true): Promise<GuessResult> {
