@@ -281,6 +281,43 @@
 .br-input-group small { color: #666; font-size: 0.8rem; }
 .br-slider { width: 100%; accent-color: #fff; }
 
+.br-auto-advance-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.br-auto-advance-switch:focus-visible { outline: 2px solid #fff; outline-offset: 4px; }
+.br-auto-advance-switch:disabled { opacity: 0.5; cursor: not-allowed; }
+.br-switch-control { display: flex; align-items: center; gap: 0.5rem; }
+.br-switch-control > span:first-child { min-width: 1.5rem; font-size: 0.8rem; }
+.br-switch-track {
+  display: flex;
+  align-items: center;
+  width: 44px;
+  height: 26px;
+  padding: 3px;
+  box-sizing: border-box;
+  border: 1px solid #777;
+  border-radius: 999px;
+  background: #333;
+}
+.br-switch-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.br-auto-advance-switch[aria-checked="true"] .br-switch-track { background: #fff; border-color: #fff; }
+.br-auto-advance-switch[aria-checked="true"] .br-switch-thumb { transform: translateX(18px); background: #181818; }
+
 @media (max-width: 800px) {
   .br-home-layout { grid-template-columns: 1fr; gap: 1rem; }
   .br-home-artwork { max-width: 560px; margin: 0 auto; }
@@ -449,6 +486,12 @@
   border-radius: 10px;
 }
 
+.br-top-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .br-history-button {
   width: auto;
   min-height: 52px;
@@ -463,6 +506,19 @@
 }
 
 .br-history-button:hover { background: #181818; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); }
+
+.br-next-round-button,
+.br-next-round-button:hover {
+  background: #fff;
+  color: #181818;
+}
+
+.br-next-round-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
 
 .br-round-info { font-size: 1.1rem; font-weight: 700; }
 
@@ -726,17 +782,57 @@
   color: #888;
 }
 
-/* react-flags-select renders a light menu; override the page's inherited
-   white text so its search field and country names retain contrast. */
-.br-flag-select [class*="_selectOptions"],
-.br-flag-select [class*="_filterBox"] input {
-  color: #1b1b24;
+.br-guess-panel .br-flag-select { width: 100%; min-width: 0; padding-bottom: 0; }
+
+.br-flag-select > button {
+  min-height: 52px;
+  padding: 0.65rem 0.8rem;
+  border: 0.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  background: transparent;
+  color: #fff;
+}
+
+.br-flag-select > button:hover,
+.br-flag-select > button[aria-expanded="true"] { background: #181818; border-color: #fff; }
+.br-flag-select > button::after { border-top-color: #fff; }
+.br-flag-select > button[aria-expanded="true"]::after { border-bottom-color: #fff; }
+.br-flag-select [class*="_selectValue"] { min-width: 0; padding: 0; }
+.br-flag-select [class*="_selectFlag"] { flex-shrink: 0; }
+
+.br-flag-select [role="listbox"] {
+  max-height: min(300px, 45vh);
+  border: 0.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  background: #181818;
+  color: #fff;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  scrollbar-color: #666 #181818;
+}
+
+.br-flag-select [role="option"] { margin: 0; padding: 0.7rem 0.8rem; }
+.br-flag-select [role="option"]:hover,
+.br-flag-select [role="option"]:focus,
+.br-flag-select [role="option"][aria-selected="true"] { background: #333; color: #fff; }
+
+.br-flag-select [class*="_filterBox"] {
+  padding: 0.6rem 0;
+  background: #181818;
 }
 
 .br-flag-select [class*="_filterBox"] input {
-  background: #fff;
-  caret-color: #1b1b24;
+  min-height: 44px;
+  border: 0.5px solid #777;
+  border-radius: 7px;
+  background: #252525;
+  color: #fff;
+  caret-color: #fff;
+  font: inherit;
 }
+
+.br-flag-select [class*="_filterBox"] input::placeholder { color: #aaa; }
+.br-flag-select > button:focus-visible,
+.br-flag-select [class*="_filterBox"] input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 
 .br-year-row {
   display: flex;
