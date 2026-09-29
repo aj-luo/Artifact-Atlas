@@ -25,6 +25,7 @@ function JoinLobby({ setCurrentView, setGameId }) {
             });
 
             if (!response.ok) {
+                alert('Failed to join lobby. Lobby code is incorrect or lobby is full.');
                 throw new Error('Failed to join lobby');
             }
 

@@ -111,9 +111,11 @@ export class GameSession {
       if (!game) throw new GameSessionError('Game not found', 404);
       if (game.status !== 'waiting') throw new GameSessionError('Game has already started', 409);
 
+      const maxPlayers = game.number_players ?? MAX_PLAYERS;
+
       const playerCount = await tx.party_players.count({ where: { game_id: game.id } });
-      if (playerCount >= MAX_PLAYERS) {
-        throw new GameSessionError(`Room is full (maximum ${MAX_PLAYERS} players)`, 409);
+      if (playerCount >= maxPlayers) {
+        throw new GameSessionError(`Room is full (maximum ${maxPlayers} players)`, 409);
       }
 
       const created = await tx.party_players.create({
@@ -128,6 +130,45 @@ export class GameSession {
 
     await this.refresh();
     return { playerId: player.id };
+  }
+
+  //this is to help start the game
+  async start({ archeologist, guesser }: { archeologist: string; guesser: string }): Promise<void> {
+
+    //this helps get a random artifact
+    const artifact = await pickRandomArtifact();
+    if (!artifact) throw new GameSessionError('Could not find an artifact - try again', 503);
+
+    await db.$transaction(async (tx) => {
+      const game = await lockGame(tx, this.game.id);
+
+      //game is not found error
+      if (!game) throw new GameSessionError('Game not found', 404);
+
+      //game is not in waiting state aka the game is in progress
+      if (game.status != 'waiting') throw new GameSessionError('Game is not in waiting state', 409)
+
+      
+      const playerCount = await tx.party_players.count({where: { game_id: game.id }});
+      if (playerCount < 3) throw new GameSessionError('Need at least 3 players to start', 400);
+
+
+      //Update the row in the table with the information, need to get object_link as well
+      await tx.party_games.update({
+        where: { id: game.id },
+        data: {
+          status: 'active',
+          artifact_url: artifact.linkResource,
+          artifact_image_url: artifact.imageUrl, 
+          artifact_title: artifact.title, 
+          object_id: artifact.objectId,
+          archeologist: archeologist,
+          guesser: guesser,
+          revision: { increment: 1 },
+        }
+      })
+    })
+
   }
 
   // async start(): Promise<void> {
