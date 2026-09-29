@@ -14,6 +14,8 @@ import Party from '../Party/Party.jsx'
 import PartyLobby from '../PartyLobby/PartyLobby.jsx'
 import PartyWaitingRoom from '../PartyWaitingRoom/PartyWaitingRoom.jsx'
 import JoinLobby from '../JoinLobby/JoinLobby.jsx'
+import GameScreenIntro from '../GameScreenIntro/GameScreenIntro.jsx'
+import GameScreenProper from '../GameScreenProper/GameScreenProper.jsx'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -23,6 +25,15 @@ export default function Home() {
 
   // this tracks the gameId for the current game session 
   const [gameId, setGameId] = useState(null);
+
+  //tracks who the host is
+  const [isHost, setIsHost] = useState(false);
+
+  //tracks players in the game
+  const [players, setTotalPlayers] = useState([]);
+
+  //tracks the roles of the players
+  const [myRole, setMyRole] = useState(null);
 
   //helper mapping state names to components
   const renderView = () => {
@@ -38,11 +49,15 @@ export default function Home() {
       case 'party':
         return <Party setCurrentView={setCurrentView}/>;
       case 'partylobby':
-        return <PartyLobby setCurrentView={setCurrentView} setGameId={setGameId}/>;
+        return <PartyLobby setCurrentView={setCurrentView} setGameId={setGameId} setIsHost={setIsHost}/>;
       case 'partywaitingroom':
-        return <PartyWaitingRoom setCurrentView={setCurrentView} gameId={gameId}/>;
+        return <PartyWaitingRoom setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} setTotalPlayers={setTotalPlayers}/>;
       case 'joinlobby':
         return <JoinLobby setCurrentView={setCurrentView} setGameId={setGameId}/>;
+      case 'gameintro':
+        return <GameScreenIntro setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} setMyRole={setMyRole} />;
+      case 'gamePlay':
+        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole}/>
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }

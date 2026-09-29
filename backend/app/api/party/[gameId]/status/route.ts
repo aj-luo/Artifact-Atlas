@@ -25,8 +25,6 @@ export async function GET(_req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
-    // Lazy timer resolution — if the round timer has expired and no more guesses
-    // are coming in, polling this endpoint will eventually trigger the round end.
     const resolved = await session.resolveRoundIfNeeded();
     if (resolved) scheduleGameBroadcast(session);
 

@@ -3,7 +3,7 @@ import RangeToggle from '../RangeToggle/RangeToggle';
 import styles from './PartyLobby.module.css';
 import { useState } from 'react';
 
-function PartyLobby({ setCurrentView, setGameId }) {
+function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
     const [playerCount, setPlayerCount] = useState(4);
     const [timeLimit, setTimeLimit] = useState(5);
     const [nickname, setNickname] = useState('');
@@ -47,9 +47,16 @@ function PartyLobby({ setCurrentView, setGameId }) {
         const data = await response.json();
         console.log('Joined Lobby successfully:', data);
         
-        // Persist local player ID if returned
-        if (data.playerId) {
-            localStorage.setItem(`party_player_${data.gameId}`, data.playerId);
+        // Handle both possible API return formats ({ playerId } or { player: { id } })
+        const pId = data.playerId || data.player?.id || data.id;
+
+        if (pId) {
+            // Save both generic and game-specific keys so all components can find it
+            localStorage.setItem('playerId', pId);
+            localStorage.setItem(`party_player_${targetGameId}`, pId);
+            console.log('Saved local player ID:', pId);
+        } else {
+            console.warn('No player ID returned from join API. Response was:', data);
         }
     };
 
@@ -68,9 +75,13 @@ function PartyLobby({ setCurrentView, setGameId }) {
             
             // 2. Join the newly created lobby using the returned gameId
             await handleCreatePlayer(newGameId, nickname.trim());
+
+            // 3. SET HOST TO TRUE FIRST
+            setIsHost(true);
             
-            // 3. Navigate to waiting room on complete success
+            // 4. NOW switch view
             setCurrentView('partywaitingroom');
+            
         } catch (error) {
             console.error('Failed to start party session:', error);
             alert('Could not set up lobby. Please try again.');

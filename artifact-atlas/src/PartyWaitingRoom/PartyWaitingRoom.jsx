@@ -2,7 +2,7 @@ import styles from './PartyWaitingRoom.module.css';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-function PartyWaitingRoom({ setCurrentView, gameId }) {
+function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
     //These are the default values for time limit and player count. They can be changed by the user using the toggles below. hooks can be used to store the values and update them when the user changes them. The values can then be passed to the backend when creating the lobby.
     const [players, setPlayers] = useState([]);
     const [maxPlayers, setMaxPlayers] = useState(4); // Default max players, can be updated based on game settings
@@ -49,6 +49,13 @@ function PartyWaitingRoom({ setCurrentView, gameId }) {
             }
         });
 
+
+        // We also listen for the host to start the game
+        channel.on('broadcast', { event: 'game-start' }, () => {
+            console.log('Game start signal received');
+            setCurrentView('gameintro');
+        });
+
         //subscribe to start receiving updates from the channel
         channel.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
@@ -62,11 +69,43 @@ function PartyWaitingRoom({ setCurrentView, gameId }) {
         };
     }, [gameId]);
 
+    // Sync local players array with parent state whenever players list updates
+    useEffect(() => {
+        if (setTotalPlayers && players.length > 0) {
+            setTotalPlayers(players);
+        }
+    }, [players, setTotalPlayers]);
+
+    //helper function to start the game, only the host can start the game, this sends a request to backend to put the game in progress mode and navigates to game screen. Also broadcast the start signal to the other players in the lobby so they can navigate to the game screen as well.
+    const handleStartGame = async () => {
+        try {
+
+            //broadcast in realtime to other players to also change view to game screen
+            const channel = supabase.channel(`party_game:${gameId}`);
+            await channel.send({
+                type: 'broadcast',
+                event: 'game-start',
+                payload: { message: 'Game has started!' }
+            })
+
+            // 1. Give the WebSocket a tiny window to flush the message before cleanup
+            setTimeout(() => {
+                supabase.removeChannel(channel);
+            }, 200);
+
+            // Navigate to the game view
+            setCurrentView('gameintro');
+        }
+        catch (error) {
+            console.error('Error starting game:', error);
+        }
+    }
+
     return (
         <div className={styles.home}>
             {/* This is used to show the lobby status, whether we are waiting for players or lobby is full*/}
             <p className={styles.tagline}>
-                YOU ARE THE HOST OF THE LOBBY
+                {isHost ? 'YOU ARE THE HOST OF THE LOBBY' : 'WELCOME TO THE LOBBY!'}
             </p>
             <p className={styles.tagline}>
                 {isConnecting 
@@ -101,12 +140,15 @@ function PartyWaitingRoom({ setCurrentView, gameId }) {
                 <button className={styles.start_button} onClick={() => setCurrentView('party')}>
                     BACK
                 </button>
-                <button 
-                    className={styles.start_button}
-                    disabled={!lobbyFull || isConnecting}
-                >
-                    START GAME
-                </button>
+                {isHost && (
+                    <button 
+                        className={styles.start_button}
+                        onClick={handleStartGame}
+                        disabled={!lobbyFull || isConnecting}
+                    >
+                        START GAME
+                    </button>
+                )}
             </div>
         </div>
     );
