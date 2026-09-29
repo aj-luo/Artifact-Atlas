@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { Prisma, type multiplayer_rooms } from '@prisma/client';
+import { Prisma, type multiplayer_games, type multiplayer_rooms } from '@prisma/client';
 import { db } from '@/lib/db';
 import { pickRandomArtifact } from '@/lib/artifactSelector';
 import { readRoomSnapshot } from './roomSnapshot';
@@ -149,7 +149,13 @@ export async function transitionRoom(roomId: string, action: string, token: stri
   return roomSnapshot(roomId);
 }
 
-export async function authorizeGuess(gameId: string, token: string, playerId: string) {
+export interface GuessAuthorization {
+  roomId: string;
+  memberId: string;
+  game: multiplayer_games;
+}
+
+export async function authorizeGuess(gameId: string, token: string, playerId: string): Promise<GuessAuthorization> {
   if (!isUuid(gameId) || !isUuid(playerId)) throw new GameSessionError('Invalid session or player ID');
   const game = await db.multiplayer_games.findUnique({ where: { id: gameId } });
   if (!game?.room_id) throw new GameSessionError('Session not found', 404);
@@ -160,7 +166,7 @@ export async function authorizeGuess(gameId: string, token: string, playerId: st
   if (room?.current_session_id !== gameId || room.status !== 'active') throw new GameSessionError('Session is no longer active', 409);
   const player = await db.multiplayer_players.findFirst({ where: { id: playerId, game_id: gameId, member_id: member.id } });
   if (!player) throw new GameSessionError('Player does not belong to this member', 403);
-  return game.room_id;
+  return { roomId: game.room_id, memberId: member.id, game };
 }
 
 export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnType<typeof roomSnapshot>>) {
