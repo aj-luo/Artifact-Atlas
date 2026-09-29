@@ -22,15 +22,26 @@ export interface SelectedArtifact {
  * is issued per call on a warm cache.
  */
 export async function pickRandomArtifact(maxAttempts = 10): Promise<SelectedArtifact | null> {
+  const started = performance.now();
   const dist = await getDistribution();
+  const distributionMs = performance.now() - started;
+  let offsetQueryMs = 0;
+  let attempts = 0;
+  const tenth = (ms: number) => Math.round(ms * 10) / 10;
 
-  if (dist.periods.length === 0) return null;
+  const report = () => console.info('[multiplayer/artifact:timing]', JSON.stringify({
+    distributionMs: tenth(distributionMs), offsetQueryMs: tenth(offsetQueryMs),
+    attempts, totalMs: tenth(performance.now() - started),
+  }));
+
+  if (dist.periods.length === 0) { report(); return null; }
 
   for (let i = 0; i < maxAttempts; i++) {
     const { period }         = weightedRandom(dist.periods);
     const { country, count } = weightedRandom(dist.byPeriod[period]);
     const range = PERIOD_RANGES[period];
 
+    const queryStarted = performance.now();
     const artifact = await db.metObjects.findFirst({
       where: {
         Primary_Image_URL: { not: null },
@@ -49,6 +60,8 @@ export async function pickRandomArtifact(maxAttempts = 10): Promise<SelectedArti
       orderBy: { Object_ID: 'asc' },
       skip:    Math.floor(Math.random() * count),
     });
+    offsetQueryMs += performance.now() - queryStarted;
+    attempts++;
 
     if (!artifact) continue;
 
@@ -60,6 +73,7 @@ export async function pickRandomArtifact(maxAttempts = 10): Promise<SelectedArti
       ? Math.max(Number(artifact.Object_End_Date), beginYear)
       : beginYear;
 
+    report();
     return {
       objectId:     artifact.Object_ID,
       iso3,
@@ -71,5 +85,6 @@ export async function pickRandomArtifact(maxAttempts = 10): Promise<SelectedArti
     };
   }
 
+  report();
   return null;
 }

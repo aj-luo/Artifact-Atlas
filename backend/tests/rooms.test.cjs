@@ -13,7 +13,7 @@ const baseline = fs.readFileSync(path.join(__dirname, 'legacy-multiplayer.sql'),
 
 // Exercise the production TypeScript services, replacing only infrastructure:
 // PostgreSQL transport, random artifact selection, and geographic score lookup.
-function services(db) {
+function services(db, options = {}) {
   const cache = new Map();
   function load(file) {
     file = path.resolve(root, file);
@@ -24,7 +24,7 @@ function services(db) {
     cache.set(file, mod);
     mod.require = name => {
       if (name === '@/lib/db') return { db };
-      if (name === '@/lib/artifactSelector') return { pickRandomArtifact: async () => ({ objectId: 1n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'https://example.test/art.jpg', title: 'Test artifact' }) };
+      if (name === '@/lib/artifactSelector') return { pickRandomArtifact: options.pickRandomArtifact ?? (async () => ({ objectId: 1n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'https://example.test/art.jpg', title: 'Test artifact' })) };
       if (name === './scoring') return { ScoringModule: { calculateScore: async (_country, _actual, year) => ({ totalScore: year, countryScore: year, yearScore: 0, distanceKm: 0, yearsAway: 0 }) } };
       if (name.startsWith('@/')) return load(`${name.slice(2)}.ts`);
       if (name.startsWith('.')) return load(path.resolve(path.dirname(file), `${name}.ts`));
@@ -105,7 +105,8 @@ test('additive migration preserves legacy history and only awards reconstructabl
     const stats = await s.memberStatistics(partial.id);
     assert.equal(stats[0].sessionsPlayed, 1);
     assert.deepEqual(stats[0].placements, {});
-    assert.equal((await db.multiplayer_rooms.findUnique({ where: { id: full.id } })).host_member_id, players[0].id);
+    const expectedHost = [...players].sort((a, b) => a.created_at - b.created_at || a.id.localeCompare(b.id))[0];
+    assert.equal((await db.multiplayer_rooms.findUnique({ where: { id: full.id } })).host_member_id, expectedHost.id);
   } finally { await pg.close(); }
 });
 
@@ -317,6 +318,9 @@ test('shared starts, early reveals, deadlines, and rematches use database time',
     assert.equal(state.status, 'finished');
     assert.equal(state.roundHistory.length, 2);
     assert.deepEqual(state.players.map(p => p.cumulativeScore), [200, 100]);
+    assert.deepEqual(state.roundHistory[1].guesses.map(guess =>
+      [guess.totalScore, guess.hpLost, guess.countryGuessed]), [[100, 0, 'USA'], [0, 100, null]]);
+    assert.equal(await db.multiplayer_guesses.count({ where: { game_id: id, round_number: 2 } }), 2);
     const recovered = await s.roomStatus(room.id);
     assert.deepEqual(recovered.players, state.players);
     assert.equal(recovered.resultsRevealAt, state.resultsRevealAt);
@@ -343,6 +347,52 @@ test('concurrent final submissions apply damage and history exactly once', async
     assert.deepEqual(finished.players.map(p => [p.health, p.cumulativeScore]), [[1000, 100], [950, 50]]);
     assert.equal(await db.multiplayer_guesses.count({ where: { game_id: state.currentSessionId } }), 2);
     assert.equal((await s.roomStatus(room.id)).resultsRevealAt, finished.resultsRevealAt);
+  } finally { await pg.close(); }
+});
+
+test('failed artifact lookup leaves the round intact; retry resolves with set-based player writes', async () => {
+  const { pg, db } = await fresh();
+  try {
+    let artifactAvailable = true;
+    const artifact = async () => artifactAvailable
+      ? { objectId: 2n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'https://example.test/next.jpg', title: 'Next artifact' }
+      : null;
+    const s = services(db, { pickRandomArtifact: artifact });
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 500, max_rounds: 2 } });
+    const host = await s.joinRoom(room.id, 'Host', '');
+    await s.joinRoom(room.id, 'Guest', '');
+    const initial = await s.transitionRoom(room.id, 'start', host.credential, null);
+    await openRound(db, initial.currentSessionId);
+    artifactAvailable = false;
+    for (const player of initial.players) {
+      const result = await (await s.GameSession.load(initial.currentSessionId)).submitGuess(player.id, 'USA', 100, 1);
+      assert.equal(result.roundResolved, false);
+    }
+    const pending = await s.roomStatus(room.id);
+    assert.equal(pending.currentRound, 1);
+    assert.deepEqual(pending.players.map(player => player.health), [500, 500]);
+    assert.equal(pending.roundHistory.length, 0);
+    const revision = pending.revision;
+    artifactAvailable = true;
+    const originalTransaction = db.$transaction;
+    const statements = [];
+    db.$transaction = work => originalTransaction(async tx => {
+      const query = tx.$queryRaw;
+      tx.$queryRaw = (parts, ...values) => {
+        statements.push(parts.join('?').trim());
+        return query(parts, ...values);
+      };
+      return work(tx);
+    });
+    const advanced = await s.roomStatus(room.id);
+    db.$transaction = originalTransaction;
+    assert.equal(advanced.currentRound, 2);
+    assert.equal(advanced.revision, revision + 1);
+    assert.equal((await db.multiplayer_games.findUnique({ where: { id: initial.currentSessionId } })).revision, 4);
+    assert.equal(advanced.roundHistory.length, 1);
+    assert.deepEqual(advanced.players.map(player => [player.health, player.cumulativeScore]), [[500, 100], [500, 100]]);
+    assert.equal(statements.filter(sql => /^UPDATE multiplayer_players AS p/.test(sql)).length, 1);
+    assert.equal(statements.filter(sql => /^INSERT INTO multiplayer_guesses/.test(sql)).length, 0);
   } finally { await pg.close(); }
 });
 
