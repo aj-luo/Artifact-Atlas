@@ -84,6 +84,29 @@ export class GameSessionError extends Error {
 
 type Transaction = Prisma.TransactionClient;
 
+type ResolutionTiming = {
+  selectionMs: number;
+  lockWaitMs: number;
+  readsMs: number;
+  missingGuessesMs: number;
+  playerUpdatesMs: number;
+  placementMs: number;
+  finalGameUpdateMs: number;
+};
+
+function resolutionTiming(): ResolutionTiming {
+  return { selectionMs: 0, lockWaitMs: 0, readsMs: 0, missingGuessesMs: 0,
+    playerUpdatesMs: 0, placementMs: 0, finalGameUpdateMs: 0 };
+}
+
+function reportResolution(timing: ResolutionTiming, started: number, resolved: boolean) {
+  const tenth = (ms: number) => Math.round(ms * 10) / 10;
+  console.info('[multiplayer/resolve:timing]', JSON.stringify({
+    ...Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, tenth(value)])),
+    totalMs: tenth(performance.now() - started), resolved,
+  }));
+}
+
 //lock the game row for update to prevent race conditions when multiple players are joining the same game at the same time. This is used in the join method to ensure that the player count is accurate and that the game is still in waiting state before allowing a new player to join.
 async function lockGame(tx: Transaction, gameId: string): Promise<multiplayer_games | null> {
   // Global lock order: room before session, shared with room transitions.
@@ -209,17 +232,26 @@ export class GameSession {
     const normalizedCountry = country.toUpperCase();
     const activePlayerCount = this.players.filter((player) => !player.is_eliminated).length;
     const likelyToResolve = this.roundGuesses.length + 1 >= activePlayerCount;
+    const resolveStarted = performance.now();
+    const timing = resolutionTiming();
     // Artifact selection can require database work. Keep ordinary guesses on the
     // fast path and only prefetch when this guess is expected to end the round.
     const [score, nextArtifact] = await Promise.all([
       ScoringModule.calculateScore(normalizedCountry, this.game.artifact_iso3, year,
         this.game.artifact_begin_year, this.game.artifact_end_year),
       likelyToResolve && activePlayerCount > 1 && this.game.current_round < this.game.max_rounds
-        ? pickRandomArtifact() : Promise.resolve(null),
+        ? (async () => {
+          const started = performance.now();
+          const artifact = await pickRandomArtifact();
+          timing.selectionMs = performance.now() - started;
+          return artifact;
+        })() : Promise.resolve(null),
     ]);
 
     const result = await db.$transaction(async (tx) => {
+      const lockStarted = performance.now();
       let game = await lockGame(tx, this.game.id);
+      timing.lockWaitMs = performance.now() - lockStarted;
       if (!game) throw new GameSessionError('Game not found', 404);
       if (game.current_round !== expectedRound) throw new GameSessionError('Round changed', 409);
       if (game.status !== 'active') {
@@ -239,7 +271,7 @@ export class GameSession {
         throw new GameSessionError('The next round has not started yet', 409);
       }
       if (game.round_ends_at && now >= game.round_ends_at) {
-        const resolved = await this.resolveLocked(tx, game, now, nextArtifact);
+        const resolved = await this.resolveLocked(tx, game, now, nextArtifact, timing);
         return { late: true as const, resolved };
       }
 
@@ -271,11 +303,12 @@ export class GameSession {
           revision: { increment: 1 },
         },
       });
-      const roundResolved = await this.resolveLocked(tx, updatedGame, now, nextArtifact);
+      const roundResolved = await this.resolveLocked(tx, updatedGame, now, nextArtifact, timing);
       return { late: false as const, score, roundResolved };
     });
 
     if (refresh) await this.refresh();
+    if (timing.readsMs) reportResolution(timing, resolveStarted, result.late ? result.resolved : result.roundResolved);
     if (result.late) {
       throw new GameSessionError('Round has ended; this guess was not accepted', 409, result.resolved);
     }
@@ -284,6 +317,8 @@ export class GameSession {
 
   async resolveRoundIfNeeded(): Promise<boolean> {
     if (this.game.status !== 'active' || this.game.awaiting_host) return false;
+    const resolveStarted = performance.now();
+    const timing = resolutionTiming();
     let initialized = false;
     if (!this.game.round_ends_at) {
       initialized = await db.$transaction(async (tx) => {
@@ -301,13 +336,18 @@ export class GameSession {
 
     const needsArtifact = this.game.current_round < this.game.max_rounds
       && this.players.filter(player => !player.is_eliminated).length > 1;
+    const selectionStarted = performance.now();
     const nextArtifact = needsArtifact ? await pickRandomArtifact() : null;
+    timing.selectionMs = performance.now() - selectionStarted;
     const resolved = await db.$transaction(async (tx) => {
+      const lockStarted = performance.now();
       const game = await lockGame(tx, this.game.id);
+      timing.lockWaitMs = performance.now() - lockStarted;
       if (!game || game.status !== 'active') return false;
-      return this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact);
+      return this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact, timing);
     });
     if (resolved) await this.refresh();
+    reportResolution(timing, resolveStarted, resolved);
     return resolved || initialized;
   }
 
@@ -316,14 +356,17 @@ export class GameSession {
     game: multiplayer_games,
     now: Date,
     nextArtifact: SelectedArtifact | null,
+    timing: ResolutionTiming,
   ): Promise<boolean> {
     if (game.status !== 'active' || game.awaiting_host || (game.round_starts_at && now < game.round_starts_at)) return false;
+    const readsStarted = performance.now();
     const [guesses, players] = await Promise.all([
       tx.multiplayer_guesses.findMany({
         where: { game_id: game.id, round_number: game.current_round },
       }),
       tx.multiplayer_players.findMany({ where: { game_id: game.id } }),
     ]);
+    timing.readsMs = performance.now() - readsStarted;
     const activePlayers = players.filter((player) => !player.is_eliminated);
     const timerExpired = game.round_ends_at !== null && now >= game.round_ends_at;
     const allGuessed = activePlayers.every((player) => guesses.some((guess) => guess.player_id === player.id));
@@ -338,30 +381,38 @@ export class GameSession {
 
     const maxScore = guesses.length ? Math.max(...guesses.map((guess) => guess.total_score)) : 0;
     const healthBeforeRound = Object.fromEntries(players.map((player) => [player.id, player.health]));
-    for (const player of activePlayers) {
-      const guess = guesses.find((item) => item.player_id === player.id);
-      const newHealth = Math.max(0, player.health - (maxScore - (guess?.total_score ?? 0)));
-      await tx.multiplayer_players.update({
-        where: { id: player.id },
-        data: { health: newHealth, is_eliminated: newHealth <= 0,
-          elimination_round: newHealth <= 0 ? game.current_round : null,
-          cumulative_score: { increment: guess?.total_score ?? 0 },
-        },
-      });
-      if (!guess) {
-        await tx.multiplayer_guesses.create({
-          data: {
-            game_id: game.id, player_id: player.id,
-            round_number: game.current_round, total_score: 0, submitted_at: now,
-          },
-        });
-      }
-    }
+    const guessesByPlayer = new Map(guesses.map((guess) => [guess.player_id, guess]));
+    const missingIds = activePlayers.filter((player) => !guessesByPlayer.has(player.id)).map((player) => player.id);
+    const missingStarted = performance.now();
+    const missingGuesses = missingIds.length ? await tx.$queryRaw<multiplayer_guesses[]>`
+      INSERT INTO multiplayer_guesses (game_id, player_id, round_number, total_score, submitted_at)
+      SELECT ${game.id}::uuid, id::uuid, ${game.current_round}, 0, ${now}
+      FROM jsonb_array_elements_text(${JSON.stringify(missingIds)}::jsonb) AS missing(id)
+      RETURNING *
+    ` : [];
+    timing.missingGuessesMs = performance.now() - missingStarted;
+    for (const guess of missingGuesses) guessesByPlayer.set(guess.player_id, guess);
 
-    const updatedPlayers = await tx.multiplayer_players.findMany({ where: { game_id: game.id } });
-    const revealGuesses = await tx.multiplayer_guesses.findMany({
-      where: { game_id: game.id, round_number: game.current_round },
+    const playerUpdates = activePlayers.map((player) => {
+      const score = guessesByPlayer.get(player.id)?.total_score ?? 0;
+      const health = Math.max(0, player.health - (maxScore - score));
+      return { id: player.id, health, is_eliminated: health <= 0,
+        elimination_round: health <= 0 ? game.current_round : null,
+        cumulative_score: player.cumulative_score + score };
     });
+    const updatesStarted = performance.now();
+    const changedPlayers = playerUpdates.length ? await tx.$queryRaw<multiplayer_players[]>`
+      UPDATE multiplayer_players AS p
+      SET health = changes.health, is_eliminated = changes.is_eliminated,
+          elimination_round = changes.elimination_round, cumulative_score = changes.cumulative_score
+      FROM jsonb_to_recordset(${JSON.stringify(playerUpdates)}::jsonb) AS changes
+        (id uuid, health integer, is_eliminated boolean, elimination_round integer, cumulative_score integer)
+      WHERE p.id = changes.id AND p.game_id = ${game.id}::uuid
+      RETURNING p.*
+    ` : [];
+    timing.playerUpdatesMs = performance.now() - updatesStarted;
+    const changedById = new Map(changedPlayers.map((player) => [player.id, player]));
+    const updatedPlayers = players.map((player) => changedById.get(player.id) ?? player);
     const playersById = Object.fromEntries(updatedPlayers.map((player) => [player.id, player]));
     const reveal: LastRoundReveal = {
       round: game.current_round,
@@ -372,7 +423,7 @@ export class GameSession {
       artifactImageUrl: game.artifact_image_url ?? null,
       artifactObjectId: game.object_id?.toString() ?? null,
       guesses: updatedPlayers.map((player) => {
-        const guess = revealGuesses.find((item) => item.player_id === player.id);
+        const guess = guessesByPlayer.get(player.id);
         return {
           playerId: player.id,
           playerName: player.name,
@@ -394,10 +445,21 @@ export class GameSession {
 
     const revealAt = new Date((await databaseNow(tx)).getTime() + 1000);
     if (gameOver) {
-      for (const player of rankPlayers(updatedPlayers)) {
-        await tx.multiplayer_players.update({ where: { id: player.id },
-          data: { final_placement: updatedPlayers.some(p => p.is_eliminated && p.elimination_round === null) ? null : player.final_placement, completed_at: now } });
-      }
+      const placementStarted = performance.now();
+      const unknownElimination = updatedPlayers.some(p => p.is_eliminated && p.elimination_round === null);
+      const placements = rankPlayers(updatedPlayers).map(player => ({
+        id: player.id, final_placement: unknownElimination ? null : player.final_placement,
+      }));
+      if (placements.length) await tx.$queryRaw`
+        UPDATE multiplayer_players AS p
+        SET final_placement = ranks.final_placement, completed_at = ${now}
+        FROM jsonb_to_recordset(${JSON.stringify(placements)}::jsonb) AS ranks
+          (id uuid, final_placement integer)
+        WHERE p.id = ranks.id AND p.game_id = ${game.id}::uuid
+        RETURNING p.id
+      `;
+      timing.placementMs = performance.now() - placementStarted;
+      const gameUpdateStarted = performance.now();
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
@@ -409,9 +471,11 @@ export class GameSession {
           revision: { increment: 1 },
         },
       });
+      timing.finalGameUpdateMs = performance.now() - gameUpdateStarted;
     } else {
       const room = game.room_id ? await tx.multiplayer_rooms.findUnique({ where: { id: game.room_id } }) : null;
       const awaitingHost = room?.auto_advance_rounds === false;
+      const gameUpdateStarted = performance.now();
       await tx.multiplayer_games.update({
         where: { id: game.id },
         data: {
@@ -429,6 +493,7 @@ export class GameSession {
           revision: { increment: 2 },
         },
       });
+      timing.finalGameUpdateMs = performance.now() - gameUpdateStarted;
     }
     return true;
   }
