@@ -34,6 +34,7 @@ function JoinLobby({ setCurrentView, setGameId }) {
             // Persist local player ID if returned
             if (data.playerId) {
                 localStorage.setItem('playerId', data.playerId);
+                localStorage.setItem('nickname', nickname);
             }
 
             console.log('Joined Lobby successfully:', data);

@@ -7,18 +7,6 @@
     height: 100%;
 }
 
-/* Restricts artifact image size while keeping correct aspect ratio */
-.artifactImage {
-    max-height: 400px;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    display: block;
-    margin: 0 auto 16px auto;
-}
-
 .tagline {
     font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.6);
