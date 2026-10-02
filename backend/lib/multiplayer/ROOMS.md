@@ -4,8 +4,10 @@ Before deploying the synchronized game-end changes, apply the additive
 `20260914000000_results_reveal` migration and regenerate Prisma. Every completed round includes nullable `resultsRevealAt`, set once at resolution to database time plus
 one second. Initial rounds and rematches start five seconds ahead; subsequent rounds start 20 seconds after reveal (15 seconds of results and five of countdown). Deadlines are relative to the scheduled start. Snapshots and resolution use database time. Clients gate results, history, statistics, and input through one phase calculation using that shared timestamp and their server
 clock estimate; late arrivals and legacy sessions reveal immediately. Guess
-responses and broadcasts reuse the same consistent snapshot. Concurrent guesses
-that require deferred resolution schedule recovery on the server after response.
+responses and broadcasts reuse the same consistent snapshot. Guess submissions
+commit the score before artifact selection or round resolution; the response may
+therefore report `roundResolved: false` for the final accepted guess while
+server-side status recovery completes the reveal transaction after response.
 
 Apply `20260913000000_multiplayer_rooms` before deploying the new backend and frontend together. The migration is additive. Every legacy game keeps its ID and is linked to a room with that same ID, so existing links still resolve. Applied to the configured application database on September 12, 2026. Post-migration verification confirmed that all 16 existing sessions, 20 players, and 99 guesses were preserved, with every session and player linked to its room and member. The room revision trigger and realtime publication were also verified.
 

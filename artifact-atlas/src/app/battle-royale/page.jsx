@@ -6,6 +6,7 @@ import { notifications } from '@mantine/notifications';
 import './battleRoyale.css';
 import logo from '../../assets/AA_logo.png';
 import multiplayer from '../../assets/multiplayer.png';
+import AutoAdvanceSwitch from './AutoAdvanceSwitch';
 
 export default function BattleRoyaleLobby() {
   const router = useRouter();
@@ -131,7 +132,7 @@ export default function BattleRoyaleLobby() {
                 </div>
 
                 <div className="br-input-group">
-                  <label><input type="checkbox" checked={autoAdvanceRounds} onChange={e => setAutoAdvanceRounds(e.target.checked)} /> Auto-advance rounds</label>
+                  <AutoAdvanceSwitch checked={autoAdvanceRounds} onChange={setAutoAdvanceRounds} />
                   <small>Turn off to let the host start each next round after reviewing results.</small>
                 </div>
 
