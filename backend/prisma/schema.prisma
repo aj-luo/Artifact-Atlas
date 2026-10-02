@@ -266,7 +266,7 @@ model party_games {
   created_at                                            DateTime        @default(now()) @db.Timestamptz(6)
   status                                                String?         @default("waiting")
   object_id                                             BigInt?
-  descriptions                                          String?
+  descriptions                                          Json?
   countdown_minutes                                     Int?
   archeologist                                          String?         @db.Uuid
   guesser                                               String?         @db.Uuid

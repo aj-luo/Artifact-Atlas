@@ -16,6 +16,8 @@ import PartyWaitingRoom from '../PartyWaitingRoom/PartyWaitingRoom.jsx'
 import JoinLobby from '../JoinLobby/JoinLobby.jsx'
 import GameScreenIntro from '../GameScreenIntro/GameScreenIntro.jsx'
 import GameScreenProper from '../GameScreenProper/GameScreenProper.jsx'
+import VotingPage from '../VotingPage/VotingPage.jsx'
+import ResultPage from '../ResultPage/ResultPage.jsx'
 
 export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,6 +36,14 @@ export default function Home() {
 
   //tracks the roles of the players
   const [myRole, setMyRole] = useState(null);
+
+  //tracks image
+  const [image, setImage] = useState(null);
+
+  //tracks if guess is correct from guesser
+  const [isCorrect, setIsCorrect] = useState(false);
+
+
 
   //helper mapping state names to components
   const renderView = () => {
@@ -57,7 +67,11 @@ export default function Home() {
       case 'gameintro':
         return <GameScreenIntro setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} setMyRole={setMyRole} />;
       case 'gamePlay':
-        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole}/>
+        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole} setImage={setImage}/>
+      case 'votingpage':
+        return <VotingPage image={image} gameId={gameId} myRole={myRole} setIsCorrect={setIsCorrect} setCurrentView={setCurrentView}/>
+      case 'resultpage':
+        return <ResultPage isCorrect={isCorrect} isHost={isHost}/>
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }

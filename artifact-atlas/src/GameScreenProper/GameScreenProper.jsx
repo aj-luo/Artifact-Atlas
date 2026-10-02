@@ -1,5 +1,5 @@
 import styles from './GameScreenProper.module.css';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 // 3 different sublayouts (Lobby View)
@@ -9,7 +9,6 @@ function ArcheologistLayout({ players }) {
         <div className={styles.roleContainer}>
             <h2>YOU ARE THE ARCHEOLOGIST 📜</h2>
             <p>You will be given the artifact details AND the image.</p>
-            {/* Artifact details + Image + Explanation form */}
         </div>
     );
 }
@@ -19,7 +18,6 @@ function GuesserLayout({ players }) {
         <div className={styles.roleContainer}>
             <h2>YOU ARE THE GUESSER 🔍</h2>
             <p>Wait for submissions, then guess who the true Archeologist is.</p>
-            {/* Voting/Guessing controls */}
         </div>
     );
 }
@@ -29,21 +27,77 @@ function ImposterLayout({ players }) {
         <div className={styles.roleContainer}>
             <h2>YOU ARE THE IMPOSTER! SHHHHHHH....... 🎭</h2>
             <p>You will only be able to see the artifact image. Bluff your way through the explanation!</p>
-            {/* Image + Explanation form */}
         </div>
     );
 }
 
-// 3 active gameplay views
+// Active gameplay views for writers
 
-function ArcheologistGameplay({ players, imageUrl, artifactName, artifactUrl }) {
+function ArcheologistGameplay({ players, imageUrl, artifactName, artifactUrl, setCurrentView, gameId, timeLeft }) {
     const [explanation, setExplanation] = useState('');
+    const explanationRef = useRef('');
+    const autoSubmittedRef = useRef(false);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        // TODO: Send explanation to server/broadcast to room
-        console.log("Archeologist explanation submitted:", explanation);
+    // Keep explanationRef synced with state for timer closure access
+    const handleTextChange = (e) => {
+        const val = e.target.value;
+        setExplanation(val);
+        explanationRef.current = val;
     };
+
+    const performSubmit = useCallback(async (textToSubmit) => {
+        if (autoSubmittedRef.current) return;
+        autoSubmittedRef.current = true;
+
+        const finalExplanation = textToSubmit.trim() ? textToSubmit.trim() : 'no submission';
+
+        try {
+            const playerId = localStorage.getItem('playerId');
+            const nickname = localStorage.getItem('nickname');
+
+            if (playerId) {
+                console.log('Found playerId:', playerId);
+            } else {
+                console.log('No playerId found in localStorage');
+            }
+
+            const response = await fetch(`/api/party/${gameId}/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    playerId: playerId,
+                    explanation: finalExplanation,
+                    nickname: nickname
+                }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server returned status ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log("Submission successful:", data);
+
+            setCurrentView('votingpage');
+        } catch (error) {
+            console.error("Failed to submit explanation:", error);
+        }
+    }, [gameId, setCurrentView]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        await performSubmit(explanation);
+    };
+
+    // Auto-submit when time reaches 0
+    useEffect(() => {
+        if (timeLeft === 0 && !autoSubmittedRef.current) {
+            performSubmit(explanationRef.current);
+        }
+    }, [timeLeft, performSubmit]);
 
     return (
         <div className={styles.gameplayContainer}>
@@ -62,35 +116,85 @@ function ArcheologistGameplay({ players, imageUrl, artifactName, artifactUrl }) 
             <form onSubmit={handleSubmit} className={styles.submissionForm}>
                 <textarea
                     value={explanation}
-                    onChange={(e) => setExplanation(e.target.value)}
+                    maxLength={500}
+                    onChange={handleTextChange}
                     placeholder="Provide your factual artifact description..."
                     rows={4}
                 />
+                <div className={styles.charCounter}>
+                    {explanation.length}/500 characters
+                </div>
                 <button type="submit">Submit Explanation</button>
             </form>
         </div>
     );
 }
 
-function GuesserGameplay({ players, imageUrl }) {
-    return (
-        <div className={styles.gameplayContainer}>
-            {imageUrl && (
-                <img src={imageUrl} alt="Artifact" className={styles.artifactImage} />
-            )}
-            <p>Examine the artifact and wait for player submissions to find the true Archeologist!</p>
-        </div>
-    );
-}
-
-function ImposterGameplay({ players, imageUrl }) {
+function ImposterGameplay({ players, imageUrl, gameId, setCurrentView, timeLeft }) {
     const [explanation, setExplanation] = useState('');
+    const explanationRef = useRef('');
+    const autoSubmittedRef = useRef(false);
 
-    const handleSubmit = (e) => {
-        e.preventDefault();
-        // TODO: Send explanation to server/broadcast to room
-        console.log("Imposter explanation submitted:", explanation);
+    // Keep explanationRef synced with state for timer closure access
+    const handleTextChange = (e) => {
+        const val = e.target.value;
+        setExplanation(val);
+        explanationRef.current = val;
     };
+
+    const performSubmit = useCallback(async (textToSubmit) => {
+        if (autoSubmittedRef.current) return;
+        autoSubmittedRef.current = true;
+
+        const finalExplanation = textToSubmit.trim() ? textToSubmit.trim() : 'no submission';
+
+        try {
+            const playerId = localStorage.getItem('playerId');
+            const nickname = localStorage.getItem('nickname');
+
+            if (playerId) {
+                console.log('Found playerId:', playerId);
+            } else {
+                console.log('No playerId found in localStorage');
+            }
+
+            const response = await fetch(`/api/party/${gameId}/submit`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    playerId: playerId,
+                    explanation: finalExplanation,
+                    nickname: nickname
+                }),
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server returned status ${response.status}: ${errorText}`);
+            }
+
+            const data = await response.json();
+            console.log("Submission successful:", data);
+
+            setCurrentView('votingpage');
+        } catch (error) {
+            console.error("Failed to submit explanation:", error);
+        }
+    }, [gameId, setCurrentView]);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        await performSubmit(explanation);
+    };
+
+    // Auto-submit when time reaches 0
+    useEffect(() => {
+        if (timeLeft === 0 && !autoSubmittedRef.current) {
+            performSubmit(explanationRef.current);
+        }
+    }, [timeLeft, performSubmit]);
 
     return (
         <div className={styles.gameplayContainer}>
@@ -101,35 +205,31 @@ function ImposterGameplay({ players, imageUrl }) {
             <form onSubmit={handleSubmit} className={styles.submissionForm}>
                 <textarea
                     value={explanation}
-                    onChange={(e) => setExplanation(e.target.value)}
+                    maxLength={500}
+                    onChange={handleTextChange}
                     placeholder="Bluff your description to convince everyone you are the real Archeologist..."
                     rows={4}
                 />
+                <div className={styles.charCounter}>
+                    {explanation.length}/500 characters
+                </div>
                 <button type="submit">Submit Bluff</button>
             </form>
         </div>
     );
 }
 
-function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
-    const channelRef = useRef(null);
+function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, setImage }) {
 
-    // Used to store the time state
     const [timeLeft, setTimeLeft] = useState(null);
-
-    // Started tracker
     const [started, setStarted] = useState(false);
 
-    // State for imageUrl
     const [imageUrl, setImageUrl] = useState('');
-
-    // State for artifactname
     const [artifactName, setArtifactName] = useState('');
-
-    // State for artifactUrl
     const [artifactUrl, setArtifactUrl] = useState('');
 
-    // Fetch game data when component mounts or when gameId/myRole changes
+    const channelRef = useRef(null);
+
     useEffect(() => {
         let isMounted = true;
 
@@ -137,12 +237,10 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
             if (!gameId) return;
 
             try {
-                // 1. Determine endpoint
                 const endpoint = myRole === 'archeologist'
                     ? `/api/party/${gameId}/details/archeologist`
                     : `/api/party/${gameId}/details`;
 
-                // 2. Fetch data
                 const response = await fetch(endpoint);
 
                 if (!response.ok) {
@@ -152,13 +250,13 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
 
                 const data = await response.json();
 
-                // 3. Update state with response properties
                 if (isMounted) {
                     setImageUrl(data.artifact_image_url || '');
+                    //this one is the set the global image state
+                    setImage(data.artifact_image_url);
                     setArtifactName(data.artifact_title || '');
                     setArtifactUrl(data.artifact_url || '');
                     
-                    // Convert countdown_minutes to seconds if provided, otherwise default to existing
                     if (data.countdown_minutes != null) {
                         setTimeLeft(data.countdown_minutes * 60);
                     }
@@ -170,36 +268,67 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
 
         fetchGameData();
 
+        const channel = supabase.channel(`party_game:${gameId}`);
+        channelRef.current = channel;
+
+        channel.on('broadcast', { event: 'game-initializing' }, (event) => {
+            console.log('Game start signal received:', event);
+            setStarted(true);
+        });
+
+        channel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                console.log('Successfully subscribed to party game channel');
+            }
+        });
+
         return () => {
             isMounted = false;
+            supabase.removeChannel(channel);
         };
     }, [gameId, myRole]);
+
+    // Redirect guesser immediately on game start
+    useEffect(() => {
+        if (started && myRole === 'guesser') {
+            setCurrentView('votingpage');
+        }
+    }, [started, myRole, setCurrentView]);
+
+    // Countdown Timer for writers
+    useEffect(() => {
+        if (!started) return;
+
+        const timer = setInterval(() => {
+            setTimeLeft((prevTime) => {
+                if (prevTime === null) return null;
+                if (prevTime <= 1) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prevTime - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(timer);
+    }, [started]);
 
     const handleStart = async () => {
         try {
             setStarted(true);
 
-            // TODO: Broadcast start message to other players via channelRef / Supabase Realtime
-
-            //REMEMBER TO BROADCAST TO OTHER PLAYERS TO ALSO START
-
-            // Start timer
-            const timer = setInterval(() => {
-                setTimeLeft((prevTime) => {
-                    if (prevTime <= 1) {
-                        clearInterval(timer);
-                        return 0;
-                    }
-                    return prevTime - 1;
+            if (channelRef.current) {
+                await channelRef.current.send({
+                    type: 'broadcast',
+                    event: 'game-initializing',
+                    payload: { message: 'Game is being started' }
                 });
-            }, 1000);
-
+            }
         } catch (error) {
-            console.error('Failed to start', error);
+            console.error('Failed to start game:', error);
         }
     };
 
-    // Render helper function to select layout (Lobby)
     const renderRoleLayout = () => {
         switch (myRole) {
             case 'archeologist':
@@ -213,7 +342,6 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
         }
     };
 
-    // Render active gameplay components with required data props
     const renderGameplay = () => {
         switch (myRole) {
             case 'archeologist':
@@ -223,24 +351,23 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
                         imageUrl={imageUrl} 
                         artifactName={artifactName} 
                         artifactUrl={artifactUrl} 
-                    />
-                );
-            case 'guesser':
-                return (
-                    <GuesserGameplay 
-                        players={players} 
-                        imageUrl={imageUrl} 
+                        gameId={gameId} 
+                        setCurrentView={setCurrentView}
+                        timeLeft={timeLeft}
                     />
                 );
             case 'imposter':
                 return (
                     <ImposterGameplay 
                         players={players} 
-                        imageUrl={imageUrl} 
+                        imageUrl={imageUrl}
+                        gameId={gameId} 
+                        setCurrentView={setCurrentView}
+                        timeLeft={timeLeft}
                     />
                 );
             default:
-                return <p>Loading role information...</p>;
+                return <p>Redirecting to voting...</p>;
         }
     };
 
@@ -250,12 +377,10 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole }) {
                 Time Remaining: {timeLeft != null ? `${timeLeft}s` : 'Loading...'}
             </div>
             {started ? (
-                /* Displayed after game starts */
                 <div>
                     {renderGameplay()}
                 </div>
             ) : (
-                /* Displayed before game starts (Lobby view) */
                 <>
                     {renderRoleLayout()}
 
