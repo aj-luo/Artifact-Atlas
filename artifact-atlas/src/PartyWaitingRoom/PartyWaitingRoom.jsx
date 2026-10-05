@@ -3,10 +3,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
-    //These are the default values for time limit and player count. They can be changed by the user using the toggles below. hooks can be used to store the values and update them when the user changes them. The values can then be passed to the backend when creating the lobby.
     const [players, setPlayers] = useState([]);
-    const [maxPlayers, setMaxPlayers] = useState(4); // Default max players, can be updated based on game settings
-    const [isConnecting, setIsConnecting] = useState(true); // Track if we're still connecting to the lobby
+    const [maxPlayers, setMaxPlayers] = useState(4);
+    const [isConnecting, setIsConnecting] = useState(true);
+    const [copied, setCopied] = useState(false);
 
     const lobbyFull = players.length >= maxPlayers && maxPlayers > 0;
 
@@ -28,127 +28,147 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
             }
         };
 
-        // Fetch the initial state of the lobby when the component mounts
         fetchInitialState();
 
-        //Connect to game unique Realtime channel to listen for updates on players joining or leaving
         const channel = supabase.channel(`party_game:${gameId}`);
 
-        //Listen/receive live state broadcasts from the server when players join or leave the lobby
-        channel.on('broadcast', {event: 'game-state'}, (payload) => {
+        channel.on('broadcast', { event: 'game-state' }, (payload) => {
             console.log('Realtime update received:', payload);
             
             const newPlayer = payload.payload?.player;
             if (newPlayer) {
                 setPlayers((prevPlayers) => {
                     const exists = prevPlayers.some((p) => p.id === newPlayer.id);
-                    if (exists) return prevPlayers; //avoid duplicate players
+                    if (exists) return prevPlayers;
 
                     return [...prevPlayers, newPlayer];
-                })
+                });
             }
         });
 
-
-        // We also listen for the host to start the game
         channel.on('broadcast', { event: 'game-start' }, () => {
             console.log('Game start signal received');
             setCurrentView('gameintro');
         });
 
-        //subscribe to start receiving updates from the channel
         channel.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
                 console.log('Successfully subscribed to channel');
             }
         });
 
-        //Clean up when leaving the room aka when the component unmounts or gameId changes
         return () => {
             supabase.removeChannel(channel);
         };
-    }, [gameId]);
+    }, [gameId, setCurrentView]);
 
-    // Sync local players array with parent state whenever players list updates
     useEffect(() => {
         if (setTotalPlayers && players.length > 0) {
             setTotalPlayers(players);
         }
     }, [players, setTotalPlayers]);
 
-    //helper function to start the game, only the host can start the game, this sends a request to backend to put the game in progress mode and navigates to game screen. Also broadcast the start signal to the other players in the lobby so they can navigate to the game screen as well.
+    const handleCopyCode = () => {
+        if (!gameId) return;
+        navigator.clipboard.writeText(gameId);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
     const handleStartGame = async () => {
         try {
-
-            //broadcast in realtime to other players to also change view to game screen
             const channel = supabase.channel(`party_game:${gameId}`);
             await channel.send({
                 type: 'broadcast',
                 event: 'game-start',
                 payload: { message: 'Game has started!' }
-            })
+            });
 
-            // 1. Give the WebSocket a tiny window to flush the message before cleanup
             setTimeout(() => {
                 supabase.removeChannel(channel);
             }, 200);
 
-            // Navigate to the game view
             setCurrentView('gameintro');
-        }
-        catch (error) {
+        } catch (error) {
             console.error('Error starting game:', error);
         }
-    }
+    };
+
+    // Calculate open slots remaining to display empty placeholders
+    const emptySlotsCount = Math.max(0, maxPlayers - players.length);
 
     return (
         <div className={styles.home}>
-            {/* This is used to show the lobby status, whether we are waiting for players or lobby is full*/}
-            <p className={styles.tagline}>
-                {isHost ? 'YOU ARE THE HOST OF THE LOBBY' : 'WELCOME TO THE LOBBY!'}
-            </p>
-            <p className={styles.tagline}>
-                {isConnecting 
-                    ? 'CONNECTING TO ROOM...' 
-                    : lobbyFull 
-                        ? 'LOBBY IS FULL' 
-                        : `WAITING FOR OTHER PLAYERS (${players.length}/${maxPlayers})`
-                }
-            </p>
+            <div className={styles.card}>
+                {/* Header Section */}
+                <div className={styles.header}>
+                    <span className={styles.badge}>
+                        {isHost ? 'HOST' : 'PLAYER'}
+                    </span>
+                    <h1 className={styles.title}>Waiting Room</h1>
+                    <p className={styles.statusText}>
+                        {isConnecting 
+                            ? 'Connecting to room...' 
+                            : lobbyFull 
+                                ? 'Lobby is full! Ready to start.' 
+                                : `Waiting for players (${players.length}/${maxPlayers})`
+                        }
+                    </p>
+                </div>
 
-            <p className={styles.tagline}>SHARE LOBBY ID: {gameId}</p>
+                {/* Lobby Code Box with Copy Feature */}
+                <div className={styles.codeContainer} onClick={handleCopyCode} title="Click to copy">
+                    <span className={styles.codeLabel}>LOBBY CODE</span>
+                    <div className={styles.codeValueFlex}>
+                        <span className={styles.codeValue}>{gameId || '----'}</span>
+                        <span className={styles.copyBadge}>{copied ? 'COPIED!' : 'COPY'}</span>
+                    </div>
+                </div>
 
-            <p className={styles.tagline}>PLAYERS JOINED:</p>
+                {/* Live Player List Section */}
+                <div className={styles.playerSection}>
+                    <div className={styles.playerHeader}>
+                        <span className={styles.sectionLabel}>PLAYERS JOINED</span>
+                        <span className={styles.countBadge}>{players.length} / {maxPlayers}</span>
+                    </div>
 
-            {/* Live Player List */}
-            <div style={{ margin: '1rem 0' }}>
-                {players.length === 0 ? (
-                    <p style={{ opacity: 0.7 }}>No players yet...</p>
-                ) : (
-                    <ul style={{ listStyle: 'none', padding: 0 }}>
+                    <div className={styles.playerGrid}>
                         {players.map((p, index) => (
-                            <li key={p.id || index} style={{ margin: '0.5rem 0' }}>
-                                👤 {p.name}
-                            </li>
+                            <div key={p.id || index} className={styles.playerCard}>
+                                <div className={styles.avatar}>👤</div>
+                                <span className={styles.playerName}>{p.name}</span>
+                                {index === 0 && <span className={styles.hostBadge}>HOST</span>}
+                            </div>
                         ))}
-                    </ul>
-                )}
-            </div>
 
-            {/* Main actions container */}
-            <div className={styles.actionContainer}>
-                <button className={styles.start_button} onClick={() => setCurrentView('party')}>
-                    BACK
-                </button>
-                {isHost && (
+                        {/* Render empty slot placeholders */}
+                        {!isConnecting && Array.from({ length: emptySlotsCount }).map((_, i) => (
+                            <div key={`empty-${i}`} className={`${styles.playerCard} ${styles.emptyCard}`}>
+                                <div className={styles.emptyAvatar}>+</div>
+                                <span className={styles.emptyText}>Waiting...</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Bottom Actions */}
+                <div className={styles.buttonGroup}>
                     <button 
-                        className={styles.start_button}
-                        onClick={handleStartGame}
-                        disabled={!lobbyFull || isConnecting}
+                        className={styles.backButton} 
+                        onClick={() => setCurrentView('party')}
                     >
-                        START GAME
+                        Leave
                     </button>
-                )}
+                    {isHost && (
+                        <button 
+                            className={styles.startButton}
+                            onClick={handleStartGame}
+                            disabled={!lobbyFull || isConnecting}
+                        >
+                            Start Game
+                        </button>
+                    )}
+                </div>
             </div>
         </div>
     );

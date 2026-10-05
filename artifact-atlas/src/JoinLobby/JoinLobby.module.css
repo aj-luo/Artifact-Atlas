@@ -1,123 +1,209 @@
-.home {
+.container {
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 32px;
-    height: 100%;
+    gap: 28px;
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 24px;
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
-.tagline {
-    font-size: 1.2rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    letter-spacing: 0.03em;
-}
-
-.videoContainer {
+/* Header Styling */
+.headerGroup {
     display: flex;
-    justify-content: center;
-    margin: 20px 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+    width: 100%;
 }
 
-.video {
-    max-width: 100%;
+.headerBadge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 4px 14px;
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 }
 
-.start_button {
-    border-radius: 10px;
-    height: 52px;
-    width: 180px;
-    background: transparent;
-    border: 0.5px solid white;
-    color: white;
-    font-family: inherit;
-    font-weight: 900;
-    font-size: 1.1rem;
-    cursor: pointer;
-    letter-spacing: 0.1em;
-    transition: all 0.2s ease-in-out;
+.title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: 0.02em;
 }
 
-.button_container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;  /* Keeps both buttons perfectly aligned on their vertical centers */
-  gap: 16px;
+.subtitle {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.65);
+    margin: 0;
+    line-height: 1.4;
+    max-width: 360px;
 }
 
-.start_button:hover {
-    background-color: #181818;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.loadingIcon {
-    width: 24px;
-    height: 24px;
-    display: inline-block;
-}
-
-.imageContainer {
-  display: flex;
-  flex-direction: row; /* Places images side-by-side */
-  gap: 16px;          /* Adds spacing between images */
-  align-items: center; /* Vertically aligns images centered */
-  justify-content: center; /* Horizontally centers the group (optional) */
-}
-
-.vaseImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.ushebtiImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.mayanImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.archelogistsImage {
-    height: 400px;
-}
-
-/* Container holding both action blocks side-by-side */
-.actionContainer {
+/* Glass Card Box */
+.card {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 32px 28px;
+    width: 100%;
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;          /* Space between CREATE LOBBY and the JOIN group */
-    flex-wrap: wrap;     /* Wraps cleanly on small screens */
+    flex-direction: column;
+    gap: 20px;
+    backdrop-filter: blur(12px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    box-sizing: border-box;
 }
 
-/* Grouping the JOIN button directly next to its input */
-.joinGroup {
+/* Input Fields & Labels */
+.inputGroup {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;           /* Space between JOIN button and Input */
+    flex-direction: column;
+    gap: 8px;
+    text-align: left;
+    width: 100%;
 }
 
-/* Base style for the input field to match your theme */
+.inputLabel {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.6);
+    padding-left: 2px;
+}
+
 .lobbyInput {
-    height: 52px;       /* Matches button height */
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.4);
-    background: rgba(0, 0, 0, 0.2);
-    color: white;
+    height: 52px;
+    padding: 0 18px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.35);
+    color: #ffffff;
     font-size: 1rem;
+    font-family: inherit;
     outline: none;
-    transition: border-color 0.2s ease;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.lobbyInput::placeholder {
+    color: rgba(255, 255, 255, 0.3);
 }
 
 .lobbyInput:focus {
-    border-color: #ffffff;
+    border-color: #38bdf8;
+    background: rgba(0, 0, 0, 0.5);
+    box-shadow: 0 0 12px rgba(56, 189, 248, 0.2);
+}
+
+.codeContainer {
+    font-family: monospace, inherit;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+    text-overflow: ellipsis;
+}
+
+/* Buttons Area */
+.actionArea {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.joinButton {
+    height: 52px;
+    width: 100%;
+    border-radius: 12px;
+    background: #ffffff;
+    border: none;
+    color: #000000;
+    font-weight: 800;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.joinButton:hover:not(:disabled) {
+    background: #e4e4e7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+}
+
+.joinButton:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.backButton {
+    height: 44px;
+    width: 100%;
+    border-radius: 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.05em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.backButton:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Error Banner */
+.errorBanner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: #fca5a5;
+    font-size: 0.85rem;
+    line-height: 1.3;
+}
+
+.errorIcon {
+    font-size: 1rem;
+}
+
+/* Loading Spinner */
+.buttonContent {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: #000000;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

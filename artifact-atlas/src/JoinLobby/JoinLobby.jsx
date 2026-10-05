@@ -6,10 +6,14 @@ function JoinLobby({ setCurrentView, setGameId }) {
     const [lobbyCode, setLobbyCode] = useState('');
     const [nickname, setNickname] = useState('');
     const [isJoining, setIsJoining] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
-    const handleJoinLobby = async () => {
+    const handleJoinLobby = async (e) => {
+        if (e) e.preventDefault();
+        setErrorMessage('');
+
         if (!lobbyCode.trim() || !nickname.trim()) {
-            alert('Please enter both a lobby code and a nickname.');
+            setErrorMessage('Please fill in both the lobby code and your nickname.');
             return;
         }
 
@@ -25,8 +29,9 @@ function JoinLobby({ setCurrentView, setGameId }) {
             });
 
             if (!response.ok) {
-                alert('Failed to join lobby. Lobby code is incorrect or lobby is full.');
-                throw new Error('Failed to join lobby');
+                setErrorMessage('Failed to join lobby. Code may be invalid or room is full.');
+                setIsJoining(false);
+                return;
             }
 
             const data = await response.json(); 
@@ -43,7 +48,6 @@ function JoinLobby({ setCurrentView, setGameId }) {
             if (data.playerId) {
                 const channel = supabase.channel(`party_game:${cleanCode}`);
 
-                // Subscribe to the channel to send the broadcast message
                 channel.subscribe(async (status) => {
                     if (status === 'SUBSCRIBED') {
                         console.log('Successfully subscribed to channel, sending broadcast...');
@@ -56,59 +60,101 @@ function JoinLobby({ setCurrentView, setGameId }) {
                             }
                         });
 
-                        // 1. Give the WebSocket a tiny window to flush the message before cleanup
                         setTimeout(() => {
                             supabase.removeChannel(channel);
                         }, 200);
 
-                        // 2. Navigate ONLY AFTER subscription & broadcast dispatch complete
                         setGameId(cleanCode);
                         setCurrentView('partywaitingroom');
                     }
                 });
             } else {
-                // Fallback navigation if no playerId returned
                 setGameId(cleanCode);
                 setCurrentView('partywaitingroom');
             }
         } catch (error) {
             console.error('Error joining lobby:', error);
-            alert('Could not join lobby. Please check your lobby code.');
+            setErrorMessage('Could not connect to lobby. Please check your network.');
             setIsJoining(false);
         }
     };
 
     return (
-        <div className={styles.home}>
-            <p className={styles.tagline}>JOIN LOBBY</p>
-    
-            {/* Main actions container */}
-            <div className={styles.actionContainer}>
-                <button className={styles.start_button} onClick={() => setCurrentView('party')}>
-                    BACK
-                </button>
-                
-                {/* Join group holding the Join button and input */}
-                <div className={styles.joinGroup}>
-                    <button className={styles.start_button} onClick={handleJoinLobby} disabled={isJoining}>
-                        {isJoining ? 'JOINING...' : 'JOIN'}
-                    </button>
+        <div className={styles.container}>
+            {/* Header Section */}
+            <header className={styles.headerGroup}>
+                <div className={styles.headerBadge}>Party Mode</div>
+                <h2 className={styles.title}>Join a Game</h2>
+                <p className={styles.subtitle}>
+                    Enter your room code or UUID and choose a nickname to join.
+                </p>
+            </header>
+
+            {/* Input Card Form */}
+            <form className={styles.card} onSubmit={handleJoinLobby}>
+                {errorMessage && (
+                    <div className={styles.errorBanner}>
+                        <span className={styles.errorIcon}>⚠️</span>
+                        <span>{errorMessage}</span>
+                    </div>
+                )}
+
+                <div className={styles.inputGroup}>
+                    <label className={styles.inputLabel} htmlFor="lobbyCode">Lobby Code / UUID</label>
                     <input 
+                        id="lobbyCode"
                         type="text" 
-                        placeholder="Enter Lobby Code" 
-                        className={styles.lobbyInput} 
+                        placeholder="e.g. 1e706daa-0191-4ba1-95cf-1dfc5612b1d4" 
+                        className={`${styles.lobbyInput} ${styles.codeContainer}`}
                         value={lobbyCode}
-                        onChange={(e) => setLobbyCode(e.target.value)}
-                    />
-                    <input 
-                        type="text" 
-                        placeholder="Enter Nickname" 
-                        className={styles.lobbyInput} 
-                        value={nickname}
-                        onChange={(e) => setNickname(e.target.value)}
+                        onChange={(e) => {
+                            setLobbyCode(e.target.value);
+                            setErrorMessage('');
+                        }}
                     />
                 </div>
-            </div>
+
+                <div className={styles.inputGroup}>
+                    <label className={styles.inputLabel} htmlFor="nickname">Your Nickname</label>
+                    <input 
+                        id="nickname"
+                        type="text" 
+                        placeholder="e.g. Explorer_99" 
+                        className={styles.lobbyInput} 
+                        value={nickname}
+                        maxLength={16}
+                        onChange={(e) => {
+                            setNickname(e.target.value);
+                            setErrorMessage('');
+                        }}
+                    />
+                </div>
+
+                <div className={styles.actionArea}>
+                    <button 
+                        type="submit" 
+                        className={styles.joinButton} 
+                        disabled={isJoining}
+                    >
+                        {isJoining ? (
+                            <div className={styles.buttonContent}>
+                                <span className={styles.spinner}></span>
+                                <span>JOINING...</span>
+                            </div>
+                        ) : (
+                            'JOIN LOBBY'
+                        )}
+                    </button>
+
+                    <button 
+                        type="button" 
+                        className={styles.backButton} 
+                        onClick={() => setCurrentView('party')}
+                    >
+                        ← BACK TO MENU
+                    </button>
+                </div>
+            </form>
         </div>
     );
 }
