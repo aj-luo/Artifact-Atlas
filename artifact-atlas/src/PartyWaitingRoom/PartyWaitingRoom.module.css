@@ -3,121 +3,254 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 32px;
-    height: 100%;
+    min-height: 100vh;
+    padding: 24px;
+    box-sizing: border-box;
 }
 
-.tagline {
-    font-size: 1.2rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    letter-spacing: 0.03em;
-}
-
-.videoContainer {
+/* Glassmorphism Card Container */
+.card {
+    width: 100%;
+    max-width: 480px;
+    background: rgba(18, 18, 22, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 32px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     display: flex;
-    justify-content: center;
-    margin: 20px 0;
+    flex-direction: column;
+    gap: 24px;
+    animation: fadeIn 0.3s ease-out;
 }
 
-.video {
-    max-width: 100%;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.start_button {
-    border-radius: 10px;
-    height: 52px;
-    width: 180px;
-    background: transparent;
-    border: 0.5px solid white;
-    color: white;
-    font-family: inherit;
-    font-weight: 900;
-    font-size: 1.1rem;
+.header {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.badge {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.2em;
+    padding: 4px 10px;
+    border-radius: 20px;
+    margin-bottom: 8px;
+}
+
+.title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: -0.02em;
+}
+
+.statusText {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 6px 0 0 0;
+}
+
+/* Code Container with Copy Action */
+.codeContainer {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px dashed rgba(255, 255, 255, 0.25);
+    border-radius: 14px;
+    padding: 14px 18px;
     cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.codeContainer:hover {
+    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.codeLabel {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.15em;
+}
+
+.codeValueFlex {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.codeValue {
+    font-size: 1.4rem;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: 0.15em;
+}
+
+.copyBadge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px 10px;
+    border-radius: 8px;
+    transition: background 0.2s ease;
+}
+
+/* Player Grid Section */
+.playerSection {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.playerHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.sectionLabel {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
     letter-spacing: 0.1em;
-    transition: all 0.2s ease-in-out;
 }
 
-.button_container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;  /* Keeps both buttons perfectly aligned on their vertical centers */
-  gap: 16px;
+.countBadge {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.8);
 }
 
-.start_button:hover {
-    background-color: #181818;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+.playerGrid {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
-.loadingIcon {
+.playerCard {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 10px 16px;
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.avatar {
+    font-size: 1.1rem;
+}
+
+.playerName {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #ffffff;
+    flex: 1;
+}
+
+.hostBadge {
+    font-size: 0.65rem;
+    font-weight: 800;
+    background: rgba(255, 255, 255, 0.9);
+    color: #000000;
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: 0.05em;
+}
+
+/* Empty Placeholder Slots */
+.emptyCard {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px dashed rgba(255, 255, 255, 0.08);
+    opacity: 0.6;
+}
+
+.emptyAvatar {
     width: 24px;
     height: 24px;
-    display: inline-block;
-}
-
-.imageContainer {
-  display: flex;
-  flex-direction: row; /* Places images side-by-side */
-  gap: 16px;          /* Adds spacing between images */
-  align-items: center; /* Vertically aligns images centered */
-  justify-content: center; /* Horizontally centers the group (optional) */
-}
-
-.vaseImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.ushebtiImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.mayanImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.archelogistsImage {
-    height: 400px;
-}
-
-/* Container holding both action blocks side-by-side */
-.actionContainer {
+    border-radius: 50%;
+    border: 1px dashed rgba(255, 255, 255, 0.3);
     display: flex;
-    flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 16px;          /* Space between CREATE LOBBY and the JOIN group */
-    flex-wrap: wrap;     /* Wraps cleanly on small screens */
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.4);
 }
 
-/* Grouping the JOIN button directly next to its input */
-.joinGroup {
+.emptyText {
+    font-size: 0.85rem;
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+}
+
+/* Action Buttons */
+.buttonGroup {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;           /* Space between JOIN button and Input */
+    gap: 12px;
+    margin-top: 8px;
 }
 
-/* Base style for the input field to match your theme */
-.lobbyInput {
-    height: 52px;       /* Matches button height */
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.4);
-    background: rgba(0, 0, 0, 0.2);
-    color: white;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s ease;
+.backButton {
+    flex: 1;
+    height: 50px;
+    border-radius: 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
 }
 
-.lobbyInput:focus {
-    border-color: #ffffff;
+.backButton:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.startButton {
+    flex: 2;
+    height: 50px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: none;
+    color: #000000;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+}
+
+.startButton:hover:not(:disabled) {
+    background: #e6e6e6;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.25);
+}
+
+.startButton:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
 }

@@ -8,6 +8,7 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
     const [timeLimit, setTimeLimit] = useState(5);
     const [nickname, setNickname] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
 
     // Creates the game lobby and returns the new gameId
     const handleCreateLobby = async () => {
@@ -27,7 +28,6 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
         const data = await response.json();
         console.log('Lobby Created successfully with ID:', data.gameId);
         
-        // Save game ID to parent state
         setGameId(data.gameId);
         return data.gameId;
     };
@@ -47,11 +47,9 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
         const data = await response.json();
         console.log('Joined Lobby successfully:', data);
         
-        // Handle both possible API return formats ({ playerId } or { player: { id } })
         const pId = data.playerId || data.player?.id || data.id;
 
         if (pId) {
-            // Save both generic and game-specific keys so all components can find it
             localStorage.setItem('playerId', pId);
             localStorage.setItem(`party_player_${targetGameId}`, pId);
             localStorage.setItem('nickname', nickname);
@@ -62,30 +60,33 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
     };
 
     // Orchestrates sequential creation and navigation
-    const handleStart = async () => {
+    const handleStart = async (e) => {
+        if (e) e.preventDefault();
+        setErrorMessage('');
+
         if (!nickname.trim()) {
-            alert('Please enter a nickname before creating a room.');
+            setErrorMessage('Please enter a nickname before creating a room.');
             return;
         }
 
         try {
             setIsCreating(true);
             
-            // 1. Create the lobby and extract the new gameId directly
+            // 1. Create the lobby
             const newGameId = await handleCreateLobby();
             
-            // 2. Join the newly created lobby using the returned gameId
+            // 2. Join the newly created lobby
             await handleCreatePlayer(newGameId, nickname.trim());
 
-            // 3. SET HOST TO TRUE FIRST
+            // 3. Set host state
             setIsHost(true);
             
-            // 4. NOW switch view
+            // 4. Switch view
             setCurrentView('partywaitingroom');
             
         } catch (error) {
             console.error('Failed to start party session:', error);
-            alert('Could not set up lobby. Please try again.');
+            setErrorMessage('Could not set up lobby. Please try again.');
         } finally {
             setIsCreating(false);
         }
@@ -93,36 +94,63 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
 
     return (
         <div className={styles.home}>
-            <p className={styles.tagline}>CREATE A LOBBY</p>
+            <div className={styles.card}>
+                <div className={styles.header}>
+                    <p className={styles.tagline}>HOST A GAME</p>
+                    <h1 className={styles.title}>Create Lobby</h1>
+                </div>
 
-            <RangeToggle value={playerCount} onChange={setPlayerCount} />
-            <TimeToggle value={timeLimit} onChange={setTimeLimit} />
+                <form className={styles.form} onSubmit={handleStart}>
+                    <div className={styles.inputGroup}>
+                        <label className={styles.label}>Players</label>
+                        <RangeToggle value={playerCount} onChange={setPlayerCount} />
+                    </div>
 
-            <div className={styles.joinGroup}>
-                <input 
-                    type="text" 
-                    placeholder="Enter Nickname" 
-                    className={styles.lobbyInput} 
-                    value={nickname}
-                    onChange={(e) => setNickname(e.target.value)}
-                />
-            </div>
-    
-            <div className={styles.actionContainer}>
-                <button 
-                    className={styles.start_button} 
-                    onClick={() => setCurrentView('party')}
-                    disabled={isCreating}
-                >
-                    BACK
-                </button>
-                <button 
-                    className={styles.start_button} 
-                    onClick={handleStart} 
-                    disabled={isCreating}
-                >
-                    {isCreating ? 'Creating...' : 'CREATE'}
-                </button>
+                    <div className={styles.inputGroup}>
+                        <label className={styles.label}>Time Limit</label>
+                        <TimeToggle value={timeLimit} onChange={setTimeLimit} />
+                    </div>
+
+                    <div className={styles.inputGroup}>
+                        <label className={styles.label}>Host Nickname</label>
+                        <input 
+                            type="text" 
+                            placeholder="Enter your alias" 
+                            className={styles.lobbyInput} 
+                            value={nickname}
+                            maxLength={16}
+                            onChange={(e) => setNickname(e.target.value)}
+                            disabled={isCreating}
+                        />
+                    </div>
+
+                    {errorMessage && <div className={styles.errorBadge}>{errorMessage}</div>}
+
+                    <div className={styles.buttonGroup}>
+                        <button 
+                            type="button"
+                            className={styles.backButton} 
+                            onClick={() => setCurrentView('party')}
+                            disabled={isCreating}
+                        >
+                            Back
+                        </button>
+                        <button 
+                            type="submit" 
+                            className={styles.createButton} 
+                            disabled={isCreating}
+                        >
+                            {isCreating ? (
+                                <span className={styles.loadingFlex}>
+                                    <span className={styles.spinner}></span>
+                                    Creating...
+                                </span>
+                            ) : (
+                                'Create Lobby'
+                            )}
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     );

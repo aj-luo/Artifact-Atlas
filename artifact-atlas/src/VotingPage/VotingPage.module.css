@@ -3,200 +3,281 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 32px;
-    height: 100%;
-}
-
-/* Constrained artifact image style */
-.artifactImage {
-    max-width: 280px;
-    max-height: 250px;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    display: block;
+    gap: 28px;
+    max-width: 800px;
     margin: 0 auto;
+    padding: 24px;
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
-/* Layout for description cards */
-.descriptionList {
+/* Header Section */
+.headerGroup {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    text-align: center;
+    width: 100%;
+}
+
+.headerBadge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    padding: 4px 14px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.title {
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+
+.subtitle {
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.65);
+    margin: 0;
+    max-width: 500px;
+    line-height: 1.4;
+}
+
+/* Artifact Card */
+.artifactCard {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 16px;
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    justify-content: center;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.imageWrapper {
+    width: 100%;
+    max-height: 260px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.artifactImage {
+    max-height: 260px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+
+.artifactImage:hover {
+    transform: scale(1.02);
+}
+
+/* Submissions Area */
+.submissionsContainer {
     display: flex;
     flex-direction: column;
     gap: 16px;
     width: 100%;
-    max-width: 500px;
+    max-width: 600px;
 }
 
-/* Base card container styling */
-.descriptionCard {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 10px;
-    padding: 16px;
-    text-align: left;
-    color: white;
-    font-family: inherit;
-    font-size: 1rem;
-    transition: all 0.2s ease-in-out;
+.sectionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4px;
 }
 
-/* Additional styling for interactive/button cards (Guesser view) */
-.selectableCard {
-    cursor: pointer;
+.sectionTitle {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.countBadge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.guesserSection, .spectatorSection {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
     width: 100%;
 }
 
+.descriptionList {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    width: 100%;
+}
+
+/* Card Component */
+.descriptionCard {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 18px;
+    text-align: left;
+    color: #ffffff;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+}
+
+.cardHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.authorTag {
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    color: rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 2px 8px;
+    border-radius: 6px;
+}
+
+.checkIcon {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: #38bdf8;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.descriptionText {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Interactive Card Styles for Guesser */
+.selectableCard {
+    cursor: pointer;
+    width: 100%;
+    font-family: inherit;
+}
+
 .selectableCard:hover {
-    background: rgba(255, 255, 255, 0.12);
-    border-color: rgba(255, 255, 255, 0.6);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
     transform: translateY(-2px);
 }
 
-/* Highlighted border and background when selected */
 .selectedCard {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: #ffffff;
-    box-shadow: 0 0 12px rgba(255, 255, 255, 0.3);
+    background: rgba(56, 189, 248, 0.1);
+    border-color: #38bdf8;
+    box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
 }
 
-/* Submit guess button */
+.selectedCard .authorTag {
+    background: rgba(56, 189, 248, 0.2);
+    color: #7dd3fc;
+}
+
+/* Bottom Action / Button Card */
+.actionCard {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 16px;
+    width: 100%;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+}
+
 .guessButton {
+    height: 50px;
+    width: 100%;
     border-radius: 10px;
-    height: 52px;
-    padding: 0 24px;
-    background: white;
+    background: #ffffff;
     border: none;
-    color: black;
-    font-family: inherit;
-    font-weight: 900;
-    font-size: 1.1rem;
+    color: #000000;
+    font-weight: 800;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
     cursor: pointer;
-    letter-spacing: 0.05em;
-    transition: all 0.2s ease-in-out;
-    margin-top: 16px;
+    transition: all 0.2s ease;
 }
 
 .guessButton:hover:not(:disabled) {
-    background-color: #e0e0e0;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(255, 255, 255, 0.2);
+    background: #e4e4e7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
 }
 
 .guessButton:disabled {
-    opacity: 0.4;
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.3);
     cursor: not-allowed;
 }
 
-.tagline {
-    font-size: 1.2rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    letter-spacing: 0.03em;
-}
-
-.videoContainer {
+/* Status States */
+.waitingState, .statusBox, .emptyState {
     display: flex;
+    align-items: center;
     justify-content: center;
-    margin: 20px 0;
-}
-
-.video {
-    max-width: 100%;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    padding: 16px 20px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9rem;
 }
 
-.start_button {
-    border-radius: 10px;
-    height: 52px;
-    width: 180px;
-    background: transparent;
-    border: 0.5px solid white;
-    color: white;
-    font-family: inherit;
-    font-weight: 900;
-    font-size: 1.1rem;
-    cursor: pointer;
-    letter-spacing: 0.1em;
-    transition: all 0.2s ease-in-out;
+.pulseDot {
+    width: 10px;
+    height: 10px;
+    background-color: #22c55e;
+    border-radius: 50%;
+    animation: pulse 1.8s infinite ease-in-out;
 }
 
-.button_container {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 16px;
+.spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
-.start_button:hover {
-    background-color: #181818;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
 }
 
-.loadingIcon {
-    width: 24px;
-    height: 24px;
-    display: inline-block;
-}
-
-.imageContainer {
-    display: flex;
-    flex-direction: row;
-    gap: 16px;
-    align-items: center;
-    justify-content: center;
-}
-
-.vaseImage {
-    max-width: 250px;
-    height: auto;
-}
-
-.ushebtiImage {
-    max-width: 250px;
-    height: auto;
-}
-
-.mayanImage {
-    max-width: 250px;
-    height: auto;
-}
-
-.archelogistsImage {
-    height: 400px;
-}
-
-.actionContainer {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;
-    flex-wrap: wrap;
-}
-
-.joinGroup {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;
-}
-
-.lobbyInput {
-    height: 52px;
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.4);
-    background: rgba(0, 0, 0, 0.2);
-    color: white;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s ease;
-}
-
-.lobbyInput:focus {
-    border-color: #ffffff;
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

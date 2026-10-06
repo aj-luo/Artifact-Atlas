@@ -3,133 +3,327 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 32px;
-    height: 100%;
+    gap: 28px;
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 24px;
+    min-height: 100vh;
+    box-sizing: border-box;
 }
 
-/* Restricts artifact image size while keeping correct aspect ratio */
-.artifactImage {
-    max-height: 400px;
-    width: auto;
-    height: auto;
-    object-fit: contain;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-    display: block;
-    margin: 0 auto 16px auto;
-}
-
-.tagline {
-    font-size: 1.2rem;
-    color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    letter-spacing: 0.03em;
-}
-
-.videoContainer {
+/* Timer Bar */
+.timerBanner {
     display: flex;
-    justify-content: center;
-    margin: 20px 0;
+    align-items: center;
+    gap: 12px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    padding: 10px 24px;
+    border-radius: 30px;
+    backdrop-filter: blur(8px);
+    transition: all 0.3s ease;
 }
 
-.video {
-    max-width: 100%;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+.timerBanner.lowTime {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.5);
+    animation: timerPulse 1s infinite alternate;
 }
 
-.start_button {
-    border-radius: 10px;
-    height: 52px;
-    width: 180px;
-    background: transparent;
-    border: 0.5px solid white;
-    color: white;
-    font-family: inherit;
-    font-weight: 900;
-    font-size: 1.1rem;
-    cursor: pointer;
+.timerLabel {
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
     letter-spacing: 0.1em;
-    transition: all 0.2s ease-in-out;
+    color: rgba(255, 255, 255, 0.6);
 }
 
-.button_container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;  /* Keeps both buttons perfectly aligned on their vertical centers */
-  gap: 16px;
+.timerBanner.lowTime .timerLabel {
+    color: #fca5a5;
 }
 
-.start_button:hover {
-    background-color: #181818;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+.timerValue {
+    font-family: monospace;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: #ffffff;
+    letter-spacing: 0.05em;
 }
 
-.loadingIcon {
-    width: 24px;
-    height: 24px;
-    display: inline-block;
-}
-
-.imageContainer {
-  display: flex;
-  flex-direction: row; /* Places images side-by-side */
-  gap: 16px;          /* Adds spacing between images */
-  align-items: center; /* Vertically aligns images centered */
-  justify-content: center; /* Horizontally centers the group (optional) */
-}
-
-.vaseImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.ushebtiImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.mayanImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.archelogistsImage {
-    height: 400px;
-}
-
-/* Container holding both action blocks side-by-side */
-.actionContainer {
+/* Briefing / Role Cards */
+.briefingContainer {
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    max-width: 520px;
+}
+
+.roleCard {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 32px 28px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+}
+
+.roleBadge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 4px 12px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.archeologistRole {
+    border-color: rgba(234, 179, 8, 0.3);
+}
+.archeologistRole .roleBadge {
+    background: rgba(234, 179, 8, 0.2);
+    color: #fef08a;
+}
+
+.guesserRole {
+    border-color: rgba(59, 130, 246, 0.3);
+}
+.guesserRole .roleBadge {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+.imposterRole {
+    border-color: rgba(239, 68, 68, 0.3);
+}
+.imposterRole .roleBadge {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.roleCard h2 {
+    font-size: 1.3rem;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+
+.roleCard p {
+    font-size: 0.95rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0;
+}
+
+/* Gameplay Main Layout */
+.mainContent {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+}
+
+.gameplayContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    max-width: 640px;
+}
+
+/* Artifact Card & Image */
+.artifactCard {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 20px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.imageWrapper {
+    width: 100%;
+    max-height: 360px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.4);
+}
+
+.artifactImage {
+    max-height: 360px;
+    width: auto;
+    max-width: 100%;
+    object-fit: contain;
+    border-radius: 8px;
+    transition: transform 0.3s ease;
+}
+
+.artifactImage:hover {
+    transform: scale(1.02);
+}
+
+.artifactTitle {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: #ffffff;
+    margin: 4px 0 0 0;
+    text-align: center;
+}
+
+.artifactLink {
+    font-size: 0.85rem;
+    color: #38bdf8;
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.artifactLink:hover {
+    color: #7dd3fc;
+    text-decoration: underline;
+}
+
+/* Submission Form */
+.submissionForm {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+
+.textareaWrapper {
+    position: relative;
+    width: 100%;
+}
+
+.textarea {
+    width: 100%;
+    padding: 16px;
+    padding-bottom: 32px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.4);
+    color: #ffffff;
+    font-family: inherit;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    outline: none;
+    resize: vertical;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+}
+
+.textarea:focus {
+    border-color: #ffffff;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.textarea::placeholder {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.charCounter {
+    position: absolute;
+    bottom: 12px;
+    right: 16px;
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+    pointer-events: none;
+}
+
+/* Action Cards & Buttons */
+.actionCard {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    padding: 20px 28px;
+    width: 100%;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+.startButton, .submitButton {
+    height: 50px;
+    width: 100%;
+    border-radius: 10px;
+    background: #ffffff;
+    border: none;
+    color: #000000;
+    font-weight: 800;
+    font-size: 0.95rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.startButton:hover:not(:disabled), .submitButton:hover:not(:disabled) {
+    background: #e4e4e7;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(255, 255, 255, 0.2);
+}
+
+.startButton:disabled, .submitButton:disabled {
+    background: rgba(255, 255, 255, 0.12);
+    color: rgba(255, 255, 255, 0.3);
+    cursor: not-allowed;
+}
+
+/* Status & Indicators */
+.waitingState, .statusBox {
+    display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;          /* Space between CREATE LOBBY and the JOIN group */
-    flex-wrap: wrap;     /* Wraps cleanly on small screens */
+    gap: 12px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.95rem;
 }
 
-/* Grouping the JOIN button directly next to its input */
-.joinGroup {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;           /* Space between JOIN button and Input */
+.pulseDot {
+    width: 10px;
+    height: 10px;
+    background-color: #22c55e;
+    border-radius: 50%;
+    animation: pulse 1.8s infinite ease-in-out;
 }
 
-/* Base style for the input field to match your theme */
-.lobbyInput {
-    height: 52px;       /* Matches button height */
-    padding: 0 16px;
-    border-radius: 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.4);
-    background: rgba(0, 0, 0, 0.2);
-    color: white;
-    font-size: 1rem;
-    outline: none;
-    transition: border-color 0.2s ease;
+.spinner {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #ffffff;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
 }
 
-.lobbyInput:focus {
-    border-color: #ffffff;
+@keyframes pulse {
+    0%, 100% { opacity: 0.3; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes timerPulse {
+    from { transform: scale(1); }
+    to { transform: scale(1.03); }
 }

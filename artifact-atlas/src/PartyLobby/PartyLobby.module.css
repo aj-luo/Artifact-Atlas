@@ -3,121 +3,180 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 32px;
-    height: 100%;
+    min-height: 100vh;
+    padding: 24px;
+    box-sizing: border-box;
+}
+
+/* Glassmorphism Card Container */
+.card {
+    width: 100%;
+    max-width: 440px;
+    background: rgba(18, 18, 22, 0.65);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 36px 32px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.header {
+    text-align: center;
 }
 
 .tagline {
-    font-size: 1.2rem;
-    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.25em;
+    margin: 0 0 6px 0;
+}
+
+.title {
+    font-size: 1.8rem;
+    font-weight: 800;
+    color: #ffffff;
     margin: 0;
-    letter-spacing: 0.03em;
+    letter-spacing: -0.02em;
 }
 
-.videoContainer {
+/* Form Layout */
+.form {
     display: flex;
-    justify-content: center;
-    margin: 20px 0;
+    flex-direction: column;
+    gap: 20px;
 }
 
-.video {
-    max-width: 100%;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.start_button {
-    border-radius: 10px;
-    height: 52px;
-    width: 180px;
-    background: transparent;
-    border: 0.5px solid white;
-    color: white;
-    font-family: inherit;
-    font-weight: 900;
-    font-size: 1.1rem;
-    cursor: pointer;
-    letter-spacing: 0.1em;
-    transition: all 0.2s ease-in-out;
-}
-
-.button_container {
-  display: flex;
-  flex-direction: row;
-  align-items: center;  /* Keeps both buttons perfectly aligned on their vertical centers */
-  gap: 16px;
-}
-
-.start_button:hover {
-    background-color: #181818;
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.loadingIcon {
-    width: 24px;
-    height: 24px;
-    display: inline-block;
-}
-
-.imageContainer {
-  display: flex;
-  flex-direction: row; /* Places images side-by-side */
-  gap: 16px;          /* Adds spacing between images */
-  align-items: center; /* Vertically aligns images centered */
-  justify-content: center; /* Horizontally centers the group (optional) */
-}
-
-.vaseImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.ushebtiImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.mayanImage {
-  max-width: 250px;    /* Ensures images don't overflow */
-  height: auto;       /* Maintains aspect ratio */
-}
-
-.archelogistsImage {
-    height: 400px;
-}
-
-/* Container holding both action blocks side-by-side */
-.actionContainer {
+.inputGroup {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    gap: 16px;          /* Space between CREATE LOBBY and the JOIN group */
-    flex-wrap: wrap;     /* Wraps cleanly on small screens */
+    flex-direction: column;
+    gap: 8px;
 }
 
-/* Grouping the JOIN button directly next to its input */
-.joinGroup {
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 8px;           /* Space between JOIN button and Input */
+.label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+    letter-spacing: 0.02em;
 }
 
-/* Base style for the input field to match your theme */
 .lobbyInput {
-    height: 52px;       /* Matches button height */
+    height: 50px;
     padding: 0 16px;
-    border-radius: 10px;
-    border: 0.5px solid rgba(255, 255, 255, 0.4);
-    background: rgba(0, 0, 0, 0.2);
-    color: white;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+    color: #ffffff;
     font-size: 1rem;
+    font-family: inherit;
     outline: none;
-    transition: border-color 0.2s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lobbyInput::placeholder {
+    color: rgba(255, 255, 255, 0.3);
 }
 
 .lobbyInput:focus {
-    border-color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.8);
+    background: rgba(0, 0, 0, 0.45);
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.08);
+}
+
+/* Error Badge */
+.errorBadge {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+    font-size: 0.85rem;
+    padding: 10px 14px;
+    border-radius: 10px;
+    text-align: center;
+}
+
+/* Buttons */
+.buttonGroup {
+    display: flex;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.backButton {
+    flex: 1;
+    height: 50px;
+    border-radius: 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.95rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.backButton:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ffffff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.createButton {
+    flex: 2;
+    height: 50px;
+    border-radius: 12px;
+    background: #ffffff;
+    border: none;
+    color: #000000;
+    font-size: 0.95rem;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 14px rgba(255, 255, 255, 0.15);
+}
+
+.createButton:hover:not(:disabled) {
+    background: #e6e6e6;
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(255, 255, 255, 0.25);
+}
+
+.createButton:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.createButton:disabled, .backButton:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Spinner */
+.loadingFlex {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.spinner {
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    border-top-color: #000000;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }

@@ -3,14 +3,10 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, setIsCorrect }) {
-    // Store descriptions as an object: { [playerId]: { explanation, nickname } | string }
     const [descriptions, setDescriptions] = useState({});
     const [loading, setLoading] = useState(true);
-    
-    // Track selected description/player for the Guesser
     const [selectedPlayerId, setSelectedPlayerId] = useState(null);
 
-    // Helper to ensure descriptions are formatted as an object
     const parseDescriptions = (data) => {
         if (!data) return {};
         if (typeof data === 'string') {
@@ -21,7 +17,7 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
                 return {};
             }
         }
-        return data; // Already a JSON object
+        return data;
     };
 
     useEffect(() => {
@@ -29,7 +25,6 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
 
         let isSubscribed = true;
 
-        // 1. Fetch initial descriptions for this game
         const fetchInitialDescriptions = async () => {
             setLoading(true);
             const { data, error } = await supabase
@@ -50,7 +45,6 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
 
         fetchInitialDescriptions();
 
-        // 2. Set up Supabase Realtime listener
         const channel = supabase
             .channel(`party_games_changes_${gameId}`)
             .on(
@@ -71,7 +65,6 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
                 'broadcast',
                 { event: 'guess_submitted' },
                 (payload) => {
-                    console.log('Received guess_submitted broadcast:', payload);
                     if (payload.payload) {
                         setIsCorrect(payload.payload.isCorrect);
                         setCurrentView('resultpage');
@@ -80,18 +73,14 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
             )
             .subscribe();
 
-        // 3. Cleanup subscription
         return () => {
             isSubscribed = false;
             supabase.removeChannel(channel);
         };
     }, [gameId, setCurrentView, setIsCorrect]);
 
-    // Handle guessing action
     const handleGuessArcheologist = async () => {
         if (!selectedPlayerId) return;
-        
-        console.log('Guessing player as Archeologist:', selectedPlayerId);
 
         try {
             const response = await fetch(`/api/party/${gameId}/guess`, {
@@ -105,14 +94,10 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
             }
 
             const data = await response.json();
-            console.log('Guess submitted successfully:', data);
-
             const isCorrect = data.isArcheologist;
 
-            // Once we get the result, we store it in local state
             setIsCorrect(isCorrect);
 
-            // Broadcast result to all other players in the room channel
             const channel = supabase.channel(`party_games_changes_${gameId}`);
             await channel.send({
                 type: 'broadcast',
@@ -120,7 +105,6 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
                 payload: { isCorrect },
             });
 
-            // Switch the guesser's view to resultpage
             setCurrentView('resultpage');
 
         } catch (error) {
@@ -128,80 +112,118 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
         }
     };
 
-    // Convert the key-value map into an array for rendering
     const descriptionEntries = Object.entries(descriptions);
     const isGuesser = myRole?.toLowerCase() === 'guesser';
 
     return (
         <div className={styles.home}>
-            <p>VOTING PAGE</p>
+            {/* Header / Briefing Section */}
+            <header className={styles.headerGroup}>
+                <div className={styles.headerBadge}>
+                    {isGuesser ? 'Guesser Phase' : 'Voting Phase'}
+                </div>
+                <h2 className={styles.title}>
+                    {isGuesser ? 'Identify the Archeologist' : 'Submissions Under Review'}
+                </h2>
+                <p className={styles.subtitle}>
+                    {isGuesser 
+                        ? 'Read through all descriptions below and select who you think is the real Archeologist.'
+                        : 'The Guesser is reviewing all submitted descriptions...'
+                    }
+                </p>
+            </header>
+
+            {/* Artifact Reference Image */}
             {image && (
-                <img 
-                    src={image} 
-                    alt="Artifact" 
-                    className={styles.artifactImage} 
-                />
+                <div className={styles.artifactCard}>
+                    <div className={styles.imageWrapper}>
+                        <img src={image} alt="Artifact" className={styles.artifactImage} />
+                    </div>
+                </div>
             )}
 
-            <p>Descriptions</p>
-            
-            {loading ? (
-                <p>Loading descriptions...</p>
-            ) : descriptionEntries.length === 0 ? (
-                <p>No descriptions submitted yet.</p>
-            ) : isGuesser ? (
-                /* ================= GUESSER VIEW ================= */
-                <>
-                    <div className={styles.descriptionList}>
-                        {descriptionEntries.map(([playerId, entry]) => {
-                            const isObject = typeof entry === 'object' && entry !== null;
-                            const nickname = isObject ? entry.nickname || 'Anonymous' : 'Anonymous';
-                            const text = isObject ? entry.explanation : entry;
-                            const isSelected = selectedPlayerId === playerId;
+            {/* Submissions Section */}
+            <div className={styles.submissionsContainer}>
+                <div className={styles.sectionHeader}>
+                    <span className={styles.sectionTitle}>Submitted Descriptions</span>
+                    <span className={styles.countBadge}>{descriptionEntries.length} Received</span>
+                </div>
 
-                            return (
-                                <button
-                                    key={playerId}
-                                    type="button"
-                                    className={`${styles.descriptionCard} ${styles.selectableCard} ${
-                                        isSelected ? styles.selectedCard : ''
-                                    }`}
-                                    onClick={() => setSelectedPlayerId(playerId)}
-                                >
-                                    <p><strong>{nickname}:</strong> {text}</p>
-                                </button>
-                            );
-                        })}
+                {loading ? (
+                    <div className={styles.statusBox}>
+                        <span className={styles.spinner}></span>
+                        <p>Loading descriptions...</p>
                     </div>
-
-                    {/* Guess Action Button */}
-                    <button
-                        className={styles.guessButton}
-                        disabled={!selectedPlayerId}
-                        onClick={handleGuessArcheologist}
-                    >
-                        Guess Archeologist
-                    </button>
-                </>
-            ) : (
-                /* ================= NON-GUESSER VIEW ================= */
-                <>
-                    <p>Waiting for guesser to choose.....</p>
-                    <div className={styles.descriptionList}>
-                        {descriptionEntries.map(([playerId, entry]) => {
-                            const isObject = typeof entry === 'object' && entry !== null;
-                            const nickname = isObject ? entry.nickname || 'Anonymous' : 'Anonymous';
-                            const text = isObject ? entry.explanation : entry;
-
-                            return (
-                                <div key={playerId} className={styles.descriptionCard}>
-                                    <p><strong>{nickname}:</strong> {text}</p>
-                                </div>
-                            );
-                        })}
+                ) : descriptionEntries.length === 0 ? (
+                    <div className={styles.emptyState}>
+                        <p>No descriptions submitted yet.</p>
                     </div>
-                </>
-            )}
+                ) : isGuesser ? (
+                    /* ================= GUESSER INTERACTIVE VIEW ================= */
+                    <div className={styles.guesserSection}>
+                        <div className={styles.descriptionList}>
+                            {descriptionEntries.map(([playerId, entry]) => {
+                                const isObject = typeof entry === 'object' && entry !== null;
+                                const nickname = isObject ? entry.nickname || 'Anonymous' : 'Anonymous';
+                                const text = isObject ? entry.explanation : entry;
+                                const isSelected = selectedPlayerId === playerId;
+
+                                return (
+                                    <button
+                                        key={playerId}
+                                        type="button"
+                                        className={`${styles.descriptionCard} ${styles.selectableCard} ${
+                                            isSelected ? styles.selectedCard : ''
+                                        }`}
+                                        onClick={() => setSelectedPlayerId(playerId)}
+                                    >
+                                        <div className={styles.cardHeader}>
+                                            <span className={styles.authorTag}>{nickname}</span>
+                                            {isSelected && <span className={styles.checkIcon}>✓ Selected</span>}
+                                        </div>
+                                        <p className={styles.descriptionText}>{text}</p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className={styles.actionCard}>
+                            <button
+                                className={styles.guessButton}
+                                disabled={!selectedPlayerId}
+                                onClick={handleGuessArcheologist}
+                            >
+                                SUBMIT GUESS
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    /* ================= NON-GUESSER VIEW ================= */
+                    <div className={styles.spectatorSection}>
+                        <div className={styles.waitingState}>
+                            <span className={styles.pulseDot}></span>
+                            <p>Waiting for the Guesser to make their decision...</p>
+                        </div>
+
+                        <div className={styles.descriptionList}>
+                            {descriptionEntries.map(([playerId, entry]) => {
+                                const isObject = typeof entry === 'object' && entry !== null;
+                                const nickname = isObject ? entry.nickname || 'Anonymous' : 'Anonymous';
+                                const text = isObject ? entry.explanation : entry;
+
+                                return (
+                                    <div key={playerId} className={styles.descriptionCard}>
+                                        <div className={styles.cardHeader}>
+                                            <span className={styles.authorTag}>{nickname}</span>
+                                        </div>
+                                        <p className={styles.descriptionText}>{text}</p>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

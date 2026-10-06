@@ -71,7 +71,7 @@ export default function Home() {
       case 'votingpage':
         return <VotingPage image={image} gameId={gameId} myRole={myRole} setIsCorrect={setIsCorrect} setCurrentView={setCurrentView}/>
       case 'resultpage':
-        return <ResultPage isCorrect={isCorrect} isHost={isHost}/>
+        return <ResultPage isCorrect={isCorrect} isHost={isHost} gameId={gameId} setCurrentView={setCurrentView}/>
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }
