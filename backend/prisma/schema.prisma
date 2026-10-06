@@ -189,7 +189,6 @@ model multiplayer_room_members {
 }
 
 model multiplayer_games {
-  awaiting_host       Boolean @default(false)
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   status              String                @default("waiting") @db.VarChar(16)
   current_round       Int                   @default(0)
