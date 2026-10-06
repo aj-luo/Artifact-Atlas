@@ -30,30 +30,32 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
 
         fetchInitialState();
 
-        const channel = supabase.channel(`party_game:${gameId}`);
-
-        channel.on('broadcast', { event: 'game-state' }, (payload) => {
-            console.log('Realtime update received:', payload);
-            
-            const newPlayer = payload.payload?.player;
-            if (newPlayer) {
-                setPlayers((prevPlayers) => {
-                    const exists = prevPlayers.some((p) => p.id === newPlayer.id);
-                    if (exists) return prevPlayers;
-
-                    return [...prevPlayers, newPlayer];
-                });
-            }
-        });
-
-        channel.on('broadcast', { event: 'game-start' }, () => {
-            console.log('Game start signal received');
-            setCurrentView('gameintro');
-        });
+        const channel = supabase
+            .channel(`party_game:${gameId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'party_games',
+                    filter: `id=eq.${gameId}`,
+                },
+                (payload) => {
+                    console.log('Postgres change received:', payload);
+                    // Fetch full player objects from API when player array updates
+                    if (payload.new && payload.new.players) {
+                        fetchInitialState();
+                    }
+                }
+            )
+            .on('broadcast', { event: 'game-start' }, () => {
+                console.log('Game start signal received');
+                setCurrentView('gameintro');
+            });
 
         channel.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
-                console.log('Successfully subscribed to channel');
+                console.log('Successfully subscribed to game channel');
             }
         });
 
@@ -94,7 +96,6 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
         }
     };
 
-    // Calculate open slots remaining to display empty placeholders
     const emptySlotsCount = Math.max(0, maxPlayers - players.length);
 
     return (
@@ -116,7 +117,7 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                     </p>
                 </div>
 
-                {/* Lobby Code Box with Copy Feature */}
+                {/* Lobby Code Box */}
                 <div className={styles.codeContainer} onClick={handleCopyCode} title="Click to copy">
                     <span className={styles.codeLabel}>LOBBY CODE</span>
                     <div className={styles.codeValueFlex}>

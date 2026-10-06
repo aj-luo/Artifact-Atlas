@@ -36,8 +36,6 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     //add the player to the game session with their name and return their playerId in the response with status 201 Created
     const { playerId } = await session.join(name);
-    //this is to schedule a broadcast of the game state to all players in the game session after a new player has joined. This is live and uses supabase realtime to push the updated game state to all connected clients.
-    scheduleGameBroadcast(session);
     //return the playerId and the current game status in the response with status 201 Created
     return NextResponse.json({ playerId, ...session.getStatus() }, { status: 201 });
   } catch (err) {

@@ -40,38 +40,11 @@ function JoinLobby({ setCurrentView, setGameId }) {
             if (data.playerId) {
                 localStorage.setItem('playerId', data.playerId);
                 localStorage.setItem('nickname', nickname);
-            }
-
-            console.log('Joined Lobby successfully:', data);
-
-            // Realtime broadcast setup
-            if (data.playerId) {
-                const channel = supabase.channel(`party_game:${cleanCode}`);
-
-                channel.subscribe(async (status) => {
-                    if (status === 'SUBSCRIBED') {
-                        console.log('Successfully subscribed to channel, sending broadcast...');
-                        
-                        await channel.send({
-                            type: 'broadcast',
-                            event: 'game-state',
-                            payload: {
-                                player: { id: data.playerId, name: nickname }
-                            }
-                        });
-
-                        setTimeout(() => {
-                            supabase.removeChannel(channel);
-                        }, 200);
-
-                        setGameId(cleanCode);
-                        setCurrentView('partywaitingroom');
-                    }
-                });
-            } else {
                 setGameId(cleanCode);
                 setCurrentView('partywaitingroom');
             }
+
+            console.log('Joined Lobby successfully:', data);
         } catch (error) {
             console.error('Error joining lobby:', error);
             setErrorMessage('Could not connect to lobby. Please check your network.');
