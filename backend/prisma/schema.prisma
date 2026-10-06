@@ -157,21 +157,21 @@ model iso_code_mapping {
 }
 
 model multiplayer_rooms {
-  id                 String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  status             String @default("waiting") @db.VarChar(16)
-  host_member_id     String? @db.Uuid
-  current_session_id String? @unique @db.Uuid
-  revision           Int @default(0)
-  session_count      Int @default(0)
-  max_rounds         Int @default(10)
-  max_health         Int @default(25000)
-  countdown_seconds  Int @default(60)
-  auto_advance_rounds Boolean @default(true)
-  created_at         DateTime @default(now()) @db.Timestamptz(6)
-  members            multiplayer_room_members[]
-  sessions           multiplayer_games[] @relation("RoomSessions")
-  current_session    multiplayer_games?         @relation("CurrentSession", fields: [current_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  host               multiplayer_room_members?  @relation("RoomHost", fields: [host_member_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                  String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status              String                     @default("waiting") @db.VarChar(16)
+  host_member_id      String?                    @db.Uuid
+  current_session_id  String?                    @unique @db.Uuid
+  revision            Int                        @default(0)
+  session_count       Int                        @default(0)
+  max_rounds          Int                        @default(10)
+  max_health          Int                        @default(25000)
+  countdown_seconds   Int                        @default(60)
+  created_at          DateTime                   @default(now()) @db.Timestamptz(6)
+  auto_advance_rounds Boolean                    @default(true)
+  sessions            multiplayer_games[]        @relation("RoomSessions")
+  members             multiplayer_room_members[]
+  current_session     multiplayer_games?         @relation("CurrentSession", fields: [current_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  host                multiplayer_room_members?  @relation("RoomHost", fields: [host_member_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model multiplayer_room_members {
@@ -189,7 +189,6 @@ model multiplayer_room_members {
 }
 
 model multiplayer_games {
-  awaiting_host       Boolean @default(false)
   id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   status              String                @default("waiting") @db.VarChar(16)
   current_round       Int                   @default(0)
@@ -275,6 +274,7 @@ model party_games {
   artifact_url                                          String?
   artifact_title                                        String?
   artifact_image_url                                    String?
+  players                                               Json?
   party_players_party_games_archeologistToparty_players party_players?  @relation("party_games_archeologistToparty_players", fields: [archeologist], references: [id], onDelete: NoAction, onUpdate: NoAction)
   party_players_party_games_guesserToparty_players      party_players?  @relation("party_games_guesserToparty_players", fields: [guesser], references: [id], onDelete: NoAction, onUpdate: NoAction)
   party_players_party_players_game_idToparty_games      party_players[] @relation("party_players_game_idToparty_games")

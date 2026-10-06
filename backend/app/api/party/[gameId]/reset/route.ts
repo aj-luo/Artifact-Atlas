@@ -31,7 +31,7 @@ export async function PATCH(_req: NextRequest, { params }: Params) {
       data: {
         status: 'waiting',
         object_id: null,
-        descriptions: null,
+        descriptions: undefined,
         archeologist: null,
         guesser: null,
         artifact_url: null,

@@ -101,36 +101,45 @@ export class GameSession {
   }
 
   async join(playerName: string): Promise<{ playerId: string }> {
-    const trimmed = playerName.trim();
-    if (!trimmed || trimmed.length > 32) {
-      throw new GameSessionError('Player name must be 1–32 characters');
+  const trimmed = playerName.trim();
+  if (!trimmed || trimmed.length > 32) {
+    throw new GameSessionError('Player name must be 1–32 characters');
+  }
+
+  const player = await db.$transaction(async (tx) => {
+    const game = await lockGame(tx, this.game.id);
+    if (!game) throw new GameSessionError('Game not found', 404);
+    if (game.status !== 'waiting') throw new GameSessionError('Game has already started', 409);
+
+    const maxPlayers = game.number_players ?? MAX_PLAYERS;
+
+    const playerCount = await tx.party_players.count({ where: { game_id: game.id } });
+    if (playerCount >= maxPlayers) {
+      throw new GameSessionError(`Room is full (maximum ${maxPlayers} players)`, 409);
     }
 
-    const player = await db.$transaction(async (tx) => {
-      const game = await lockGame(tx, this.game.id);
-      if (!game) throw new GameSessionError('Game not found', 404);
-      if (game.status !== 'waiting') throw new GameSessionError('Game has already started', 409);
-
-      const maxPlayers = game.number_players ?? MAX_PLAYERS;
-
-      const playerCount = await tx.party_players.count({ where: { game_id: game.id } });
-      if (playerCount >= maxPlayers) {
-        throw new GameSessionError(`Room is full (maximum ${maxPlayers} players)`, 409);
-      }
-
-      const created = await tx.party_players.create({
-        data: { game_id: game.id, name: trimmed },
-      });
-      await tx.party_games.update({
-        where: { id: game.id },
-        data: { revision: { increment: 1 } },
-      });
-      return created;
+    const created = await tx.party_players.create({
+      data: { game_id: game.id, name: trimmed },
     });
 
-    await this.refresh();
-    return { playerId: player.id };
-  }
+    // Extract current JSON array or default to empty array
+    const currentPlayers = Array.isArray(game.players) ? game.players : [];
+    const updatedPlayers = [...currentPlayers, created.id];
+
+    await tx.party_games.update({
+      where: { id: game.id },
+      data: {
+        revision: { increment: 1 },
+        players: updatedPlayers,
+      },
+    });
+
+    return created;
+  });
+
+  await this.refresh();
+  return { playerId: player.id };
+}
 
   //this is to help start the game
   async start({ archeologist, guesser }: { archeologist: string; guesser: string }): Promise<void> {

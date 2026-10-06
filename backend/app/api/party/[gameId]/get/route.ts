@@ -25,17 +25,32 @@ export async function GET(
             return NextResponse.json({ error: 'Game not found' }, { status: 404 });
         }
 
-        // Fetch all players matching game_id
+        // Extract player IDs from the JSON column (defaulting to an empty array)
+        const playerIds: string[] = Array.isArray(game.players) ? (game.players as string[]) : [];
+
+        // Fetch all players matching the IDs listed in the JSON array
         const players = await db.party_players.findMany({
-            where: { game_id: gameId },
+            where: {
+                id: {
+                    in: playerIds,
+                },
+            },
         });
+
+        // Map players into a dictionary for quick lookup by ID
+        const playerMap = new Map(players.map((p) => [p.id, p.name]));
+
+        // Preserve the exact join order defined in game.players
+        const orderedPlayers = playerIds
+            .map((id) => {
+                const name = playerMap.get(id);
+                return name ? { id, name } : null;
+            })
+            .filter((p): p is { id: string; name: string } => p !== null);
 
         return NextResponse.json({
             number_players: game.number_players,
-            players: players.map(player => ({
-                id: player.id,
-                name: player.name,
-            })),
+            players: orderedPlayers,
         }, { status: 200 });
 
     } catch (err) {
