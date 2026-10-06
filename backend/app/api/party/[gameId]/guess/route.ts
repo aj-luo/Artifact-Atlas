@@ -1,10 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -28,6 +23,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         { status: 400 }
       );
     }
+
+    const supabase = getSupabaseAdmin();
 
     // 1. Fetch current descriptions and archeologist field for this game
     const { data: game, error: fetchError } = await supabase
