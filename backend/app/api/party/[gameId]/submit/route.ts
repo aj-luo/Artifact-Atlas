@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { db } from '@/lib/db';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -31,16 +31,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       );
     }
 
-    const supabase = getSupabaseAdmin();
-
     // 1. Fetch current descriptions for this game
-    const { data: game, error: fetchError } = await supabase
-      .from('party_games')
-      .select('descriptions')
-      .eq('id', gameId)
-      .single();
+    const game = await db.party_games.findUnique({
+      where: { id: gameId },
+      select: { descriptions: true },
+    });
 
-    if (fetchError || !game) {
+    if (!game) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
@@ -56,19 +53,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     };
 
     // 3. Update the database record
-    const { data: updatedGame, error: updateError } = await supabase
-      .from('party_games')
-      .update({ descriptions: updatedDescriptions })
-      .eq('id', gameId)
-      .select()
-      .single();
+    const updatedGame = await db.party_games.update({
+      where: { id: gameId },
+      data: { descriptions: updatedDescriptions },
+    });
 
-    if (updateError) {
-      console.error('[party/submit] DB update error:', updateError);
-      return NextResponse.json({ error: 'Failed to update description' }, { status: 500 });
-    }
-
-    return NextResponse.json({ success: true, game: updatedGame }, { status: 200 });
+    return NextResponse.json({
+      success: true,
+      game: { ...updatedGame, object_id: updatedGame.object_id?.toString() ?? null },
+    }, { status: 200 });
 
   } catch (err) {
     console.error('[party/submit] Unhandled error:', err);

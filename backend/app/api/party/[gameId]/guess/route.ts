@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { db } from '@/lib/db';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -24,16 +24,13 @@ export async function POST(req: NextRequest, { params }: Params) {
       );
     }
 
-    const supabase = getSupabaseAdmin();
+    // 1. Fetch the archeologist for this game
+    const game = await db.party_games.findUnique({
+      where: { id: gameId },
+      select: { archeologist: true },
+    });
 
-    // 1. Fetch current descriptions and archeologist field for this game
-    const { data: game, error: fetchError } = await supabase
-      .from('party_games')
-      .select('descriptions, archeologist')
-      .eq('id', gameId)
-      .single();
-
-    if (fetchError || !game) {
+    if (!game) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
@@ -41,15 +38,10 @@ export async function POST(req: NextRequest, { params }: Params) {
     const isArcheologist = String(game.archeologist) === playerId;
 
     // 3. Update the game status to 'done'
-    const { error: updateError } = await supabase
-      .from('party_games')
-      .update({ status: 'done' })
-      .eq('id', gameId);
-
-    if (updateError) {
-      console.error('[party/guess] Failed to update game status:', updateError);
-      return NextResponse.json({ error: 'Failed to update game status' }, { status: 500 });
-    }
+    await db.party_games.update({
+      where: { id: gameId },
+      data: { status: 'done' },
+    });
 
     return NextResponse.json({ 
       success: true, 
