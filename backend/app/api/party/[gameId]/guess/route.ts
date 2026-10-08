@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
 import { GameSessionError, lockPartyGame } from '@/lib/party/GameSession';
 
+
 type Params = { params: Promise<{ gameId: string }> };
 
 /** POST /api/party/:gameId/guess */
@@ -24,7 +25,6 @@ export async function POST(req: NextRequest, { params }: Params) {
         where: { id: game.id },
         data: { status: 'done', revision: { increment: 1 } },
       });
-
       return String(game.archeologist) === playerId;
     });
 
