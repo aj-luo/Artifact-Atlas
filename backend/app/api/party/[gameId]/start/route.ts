@@ -8,7 +8,7 @@ type Params = { params: Promise<{ gameId: string }> };
  * POST /api/party/:gameId/start
  *
  * Transitions the game from 'waiting' to 'active', picks the first artifact,
- * and sets current_round = 1. Any player can start once 2+ players have joined.
+ * and sets current_round = 1. Only the current host can start.
  *
  * Response: { ok: true }
  */
@@ -18,12 +18,12 @@ export async function POST(_req: NextRequest, { params }: Params) {
 
     //parse JSON body from request
     const body = await _req.json();
-    const { archeologist, guesser } = body;
+    const { archeologist, guesser, hostPlayerId } = body;
 
     //some validation to make sure these yutes exist
-    if (!archeologist || !guesser) {
+    if (!archeologist || !guesser || !hostPlayerId) {
       return NextResponse.json(
-        { error: 'Missing required player IDs: archeologist and guesser' },
+        { error: 'Missing required player IDs: hostPlayerId, archeologist and guesser' },
         { status: 400 }
       );
     }
@@ -33,7 +33,7 @@ export async function POST(_req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: 'Game not found' }, { status: 404 });
     }
 
-    await session.start({ archeologist, guesser });
+    await session.start({ archeologist, guesser, hostPlayerId });
     return NextResponse.json({ ok: true, ...session.getStatus() });
   } catch (err) {
     if (err instanceof GameSessionError) {

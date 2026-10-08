@@ -23,7 +23,7 @@ function GameScreenIntro({ setCurrentView, gameId, isHost, players = [], setMyRo
 
         channel.on('broadcast', { event: 'game-starting' }, (event) => {
             setStarting(true);
-            const myPlayerId = localStorage.getItem(`party_player_${gameId}`) || localStorage.getItem('playerId');
+            const myPlayerId = sessionStorage.getItem(`party_player_${gameId}`) || sessionStorage.getItem('playerId');
             const { archeologist: archId, guesser: guessId } = event.payload;
 
             const assignedRole = determineRole(myPlayerId, archId, guessId);
@@ -62,11 +62,12 @@ function GameScreenIntro({ setCurrentView, gameId, isHost, players = [], setMyRo
 
             const randomIndex = Math.floor(Math.random() * eligiblePlayers.length);
             const selectedArcheologistId = eligiblePlayers[randomIndex].id;
+            const hostPlayerId = sessionStorage.getItem(`party_player_${gameId}`) || sessionStorage.getItem('playerId');
 
             const response = await fetch(`/api/party/${gameId}/start`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ archeologist: selectedArcheologistId, guesser }),
+                body: JSON.stringify({ archeologist: selectedArcheologistId, guesser, hostPlayerId }),
             });
 
             if (!response.ok) {
@@ -86,7 +87,7 @@ function GameScreenIntro({ setCurrentView, gameId, isHost, players = [], setMyRo
                 });
             }
 
-            const myPlayerId = localStorage.getItem(`party_player_${gameId}`) || localStorage.getItem('playerId');
+            const myPlayerId = sessionStorage.getItem(`party_player_${gameId}`) || sessionStorage.getItem('playerId');
             const hostRole = determineRole(myPlayerId, selectedArcheologistId, guesser);
             
             if (typeof setMyRole === 'function') {

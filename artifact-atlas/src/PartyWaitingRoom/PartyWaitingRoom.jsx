@@ -1,14 +1,31 @@
 import styles from './PartyWaitingRoom.module.css';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabaseClient';
+
+function getPartyPlayerId(gameId) {
+    const scopedKey = `party_player_${gameId}`;
+    const playerId = sessionStorage.getItem(scopedKey)
+        || localStorage.getItem(scopedKey)
+        || sessionStorage.getItem('playerId')
+        || localStorage.getItem('playerId');
+
+    if (playerId && !sessionStorage.getItem(scopedKey)) {
+        sessionStorage.setItem(scopedKey, playerId);
+        sessionStorage.setItem('playerId', playerId);
+    }
+    return playerId;
+}
 
 function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalPlayers }) {
     const [players, setPlayers] = useState([]);
     const [maxPlayers, setMaxPlayers] = useState(4);
     const [isConnecting, setIsConnecting] = useState(true);
     const [copied, setCopied] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
     const [isLeaving, setIsLeaving] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
+    const [joinUrl, setJoinUrl] = useState('');
     const leaveRequestSentRef = useRef(false);
     const pendingLeaveRef = useRef(null);
     const skipUnmountLeaveRef = useRef(false);
@@ -17,6 +34,8 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
 
     useEffect(() => {
         if (!gameId) return;
+
+        setJoinUrl(`${window.location.origin}/?join=${encodeURIComponent(gameId)}`);
 
         const fetchInitialState = async () => {
             try {
@@ -78,14 +97,14 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
 
     useEffect(() => {
         if (!setIsHost || !gameId || typeof window === 'undefined') return;
-        const playerId = localStorage.getItem(`party_player_${gameId}`) || localStorage.getItem('playerId');
-        setIsHost(Boolean(playerId && players[0]?.id === playerId));
+        const playerId = getPartyPlayerId(gameId);
+        setIsHost(Boolean(playerId && players.some((player) => player.id === playerId && player.isHost)));
     }, [gameId, players, setIsHost]);
 
     const leaveRoom = useCallback(async (keepalive = false) => {
         if (leaveRequestSentRef.current) return;
 
-        const playerId = localStorage.getItem(`party_player_${gameId}`) || localStorage.getItem('playerId');
+        const playerId = getPartyPlayerId(gameId);
         if (!playerId) throw new Error('Could not identify your player. Please rejoin the lobby.');
 
         leaveRequestSentRef.current = true;
@@ -142,6 +161,17 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
         setTimeout(() => setCopied(false), 2000);
     };
 
+    const handleCopyJoinLink = async () => {
+        if (!joinUrl) return;
+        try {
+            await navigator.clipboard.writeText(joinUrl);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch (error) {
+            setErrorMessage('Could not copy the join link. Please copy it from the link below.');
+        }
+    };
+
     const handleStartGame = async () => {
         try {
             const channel = supabase.channel(`party_game:${gameId}`);
@@ -168,11 +198,13 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
         try {
             const playerId = await leaveRoom();
 
-            localStorage.removeItem(`party_player_${gameId}`);
-            if (localStorage.getItem('playerId') === playerId) {
-                localStorage.removeItem('playerId');
-                localStorage.removeItem('nickname');
+            sessionStorage.removeItem(`party_player_${gameId}`);
+            if (sessionStorage.getItem('playerId') === playerId) {
+                sessionStorage.removeItem('playerId');
+                sessionStorage.removeItem('nickname');
             }
+            if (localStorage.getItem(`party_player_${gameId}`) === playerId) localStorage.removeItem(`party_player_${gameId}`);
+            if (localStorage.getItem('playerId') === playerId) localStorage.removeItem('playerId');
             setTotalPlayers?.([]);
             setIsHost?.(false);
             setCurrentView('party');
@@ -212,6 +244,26 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
                     </div>
                 </div>
 
+                <div className={styles.qrSection}>
+                    <span className={styles.sectionLabel}>SCAN TO JOIN</span>
+                    {joinUrl && (
+                        <div className={styles.qrCode}>
+                            <QRCodeSVG value={joinUrl} size={176} level="M" includeMargin />
+                        </div>
+                    )}
+                    <p className={styles.qrHint}>Scan to open the join page with this lobby code filled in.</p>
+                    {joinUrl && (
+                        <>
+                            <a className={styles.joinLink} href={joinUrl} target="_blank" rel="noreferrer">
+                                {joinUrl}
+                            </a>
+                            <button className={styles.copyLinkButton} type="button" onClick={handleCopyJoinLink}>
+                                {linkCopied ? 'LINK COPIED!' : 'COPY JOIN LINK'}
+                            </button>
+                        </>
+                    )}
+                </div>
+
                 {/* Live Player List Section */}
                 <div className={styles.playerSection}>
                     <div className={styles.playerHeader}>
@@ -224,7 +276,7 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
                             <div key={p.id || index} className={styles.playerCard}>
                                 <div className={styles.avatar}>👤</div>
                                 <span className={styles.playerName}>{p.name}</span>
-                                {index === 0 && <span className={styles.hostBadge}>HOST</span>}
+                                {p.isHost && <span className={styles.hostBadge}>HOST</span>}
                             </div>
                         ))}
 

@@ -46,6 +46,14 @@ export default function Home() {
   const [isCorrect, setIsCorrect] = useState(false);
 
   useEffect(() => {
+    const joinCode = new URLSearchParams(window.location.search).get('join');
+    if (joinCode) {
+      setGameId(joinCode);
+      setCurrentView('joinlobby');
+    }
+  }, []);
+
+  useEffect(() => {
     if (!gameTimerActive || !['gamePlay', 'votingpage'].includes(currentView)) return;
 
     const timer = setInterval(() => {

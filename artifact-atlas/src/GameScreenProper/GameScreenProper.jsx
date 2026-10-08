@@ -60,8 +60,8 @@ function ArcheologistGameplay({ imageUrl, artifactName, artifactUrl, setCurrentV
         const finalExplanation = textToSubmit.trim() ? textToSubmit.trim() : 'no submission';
 
         try {
-            const playerId = localStorage.getItem('playerId');
-            const nickname = localStorage.getItem('nickname');
+            const playerId = sessionStorage.getItem(`party_player_${gameId}`) || sessionStorage.getItem('playerId');
+            const nickname = sessionStorage.getItem('nickname');
 
             const response = await fetch(`/api/party/${gameId}/submit`, {
                 method: 'POST',
@@ -152,8 +152,8 @@ function ImposterGameplay({ imageUrl, gameId, setCurrentView, timeLeft }) {
         const finalExplanation = textToSubmit.trim() ? textToSubmit.trim() : 'no submission';
 
         try {
-            const playerId = localStorage.getItem('playerId');
-            const nickname = localStorage.getItem('nickname');
+            const playerId = sessionStorage.getItem(`party_player_${gameId}`) || sessionStorage.getItem('playerId');
+            const nickname = sessionStorage.getItem('nickname');
 
             const response = await fetch(`/api/party/${gameId}/submit`, {
                 method: 'POST',

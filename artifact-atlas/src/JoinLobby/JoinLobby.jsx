@@ -3,7 +3,10 @@ import { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 function JoinLobby({ setCurrentView, setGameId }) {
-    const [lobbyCode, setLobbyCode] = useState('');
+    const [lobbyCode, setLobbyCode] = useState(() => {
+        if (typeof window === 'undefined') return '';
+        return new URLSearchParams(window.location.search).get('join') || '';
+    });
     const [nickname, setNickname] = useState('');
     const [isJoining, setIsJoining] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
@@ -39,8 +42,9 @@ function JoinLobby({ setCurrentView, setGameId }) {
             
             // Persist local player ID if returned
             if (data.playerId) {
-                localStorage.setItem('playerId', data.playerId);
-                localStorage.setItem('nickname', nickname);
+                sessionStorage.setItem('playerId', data.playerId);
+                sessionStorage.setItem(`party_player_${cleanCode}`, data.playerId);
+                sessionStorage.setItem('nickname', nickname);
                 setGameId(cleanCode);
                 setCurrentView('partywaitingroom');
             }
