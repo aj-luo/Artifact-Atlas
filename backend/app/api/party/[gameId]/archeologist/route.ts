@@ -13,10 +13,17 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const { gameId } = await params;
 
-    // 1. Fetch game to get the archeologist's player ID
+    // Fetch the game details and related archeologist in one query.
     const game = await db.party_games.findUnique({
       where: { id: gameId },
-      select: { archeologist: true },
+      select: {
+        archeologist: true,
+        descriptions: true,
+        artifact_url: true,
+        party_players_party_games_archeologistToparty_players: {
+          select: { name: true },
+        },
+      },
     });
 
     if (!game) {
@@ -30,12 +37,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       );
     }
 
-    // 2. Fetch the player name from party_players using game.archeologist (the player ID)
-    const player = await db.party_players.findUnique({
-      where: { id: game.archeologist },
-      select: { name: true },
-    });
-
+    const player = game.party_players_party_games_archeologistToparty_players;
     if (!player) {
       return NextResponse.json(
         { error: 'Archeologist player record not found' },
@@ -43,8 +45,21 @@ export async function GET(_req: NextRequest, { params }: Params) {
       );
     }
 
-    // 3. Return the player's name as nickname
-    return NextResponse.json({ nickname: player.name });
+    const descriptions = game.descriptions && typeof game.descriptions === 'object'
+      ? game.descriptions as Record<string, unknown>
+      : {};
+    const rawDescription = descriptions[game.archeologist];
+    const archeologistDescription = typeof rawDescription === 'string'
+      ? rawDescription
+      : rawDescription && typeof rawDescription === 'object' && 'explanation' in rawDescription
+        ? String(rawDescription.explanation ?? '')
+        : '';
+
+    return NextResponse.json({
+      nickname: player.name,
+      description: archeologistDescription,
+      artifact_url: game.artifact_url,
+    });
   } catch (err) {
     console.error('[Get Archeologist Error]:', err);
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import Footer from '../Footer/Footer.jsx'
 import Gamescreen from '../Gamescreen/Gamescreen.jsx'
 import Homepage from '../Homepage/Homepage.jsx'
@@ -39,9 +39,24 @@ export default function Home() {
 
   //tracks image
   const [image, setImage] = useState(null);
+  const [timeLeft, setTimeLeft] = useState(null);
+  const [gameTimerActive, setGameTimerActive] = useState(false);
 
   //tracks if guess is correct from guesser
   const [isCorrect, setIsCorrect] = useState(false);
+
+  useEffect(() => {
+    if (!gameTimerActive || !['gamePlay', 'votingpage'].includes(currentView)) return;
+
+    const timer = setInterval(() => {
+      setTimeLeft((remaining) => remaining == null ? null : Math.max(0, remaining - 1));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [gameTimerActive, currentView]);
+
+  useEffect(() => {
+    if (timeLeft === 0) setGameTimerActive(false);
+  }, [timeLeft]);
 
 
 
@@ -67,9 +82,9 @@ export default function Home() {
       case 'gameintro':
         return <GameScreenIntro setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} setMyRole={setMyRole} />;
       case 'gamePlay':
-        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole} setImage={setImage}/>
+        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole} setImage={setImage} timeLeft={timeLeft} setTimeLeft={setTimeLeft} setGameTimerActive={setGameTimerActive}/>
       case 'votingpage':
-        return <VotingPage image={image} gameId={gameId} myRole={myRole} setIsCorrect={setIsCorrect} setCurrentView={setCurrentView}/>
+        return <VotingPage image={image} gameId={gameId} myRole={myRole} players={players} timeLeft={timeLeft} setIsCorrect={setIsCorrect} setCurrentView={setCurrentView}/>
       case 'resultpage':
         return <ResultPage isCorrect={isCorrect} isHost={isHost} gameId={gameId} setCurrentView={setCurrentView}/>
       default:
