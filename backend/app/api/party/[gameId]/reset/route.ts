@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
+import { Prisma } from '@prisma/client';
 
 type Params = { params: Promise<{ gameId: string }> };
 
@@ -31,7 +32,7 @@ export async function PATCH(_req: NextRequest, { params }: Params) {
       data: {
         status: 'waiting',
         object_id: null,
-        descriptions: undefined,
+        descriptions: Prisma.DbNull,
         archeologist: null,
         guesser: null,
         artifact_url: null,

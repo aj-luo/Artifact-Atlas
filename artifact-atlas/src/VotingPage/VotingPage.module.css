@@ -11,6 +11,46 @@
     box-sizing: border-box;
 }
 
+.timerBanner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    width: 100%;
+    max-width: 480px;
+    padding: 14px 20px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #ffffff;
+    box-sizing: border-box;
+}
+
+.timerBanner.lowTime {
+    border-color: rgba(239, 68, 68, 0.55);
+    background: rgba(239, 68, 68, 0.12);
+    animation: timerPulse 1s infinite alternate;
+}
+
+.timerLabel {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.timerValue {
+    font-size: 1.35rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+}
+
+@keyframes timerPulse {
+    from { opacity: 1; }
+    to { opacity: 0.72; }
+}
+
 /* Header Section */
 .headerGroup {
     display: flex;

@@ -2,10 +2,16 @@ import styles from './VotingPage.module.css';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, setIsCorrect }) {
+function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, image, timeLeft, setIsCorrect }) {
     const [descriptions, setDescriptions] = useState({});
     const [loading, setLoading] = useState(true);
     const [selectedPlayerId, setSelectedPlayerId] = useState(null);
+    const formatTime = (seconds) => {
+        if (seconds == null) return '--:--';
+        const minutes = Math.floor(seconds / 60);
+        const remainingSeconds = seconds % 60;
+        return `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+    };
 
     const parseDescriptions = (data) => {
         if (!data) return {};
@@ -114,9 +120,21 @@ function VotingPage({ setCurrentView, gameId, isHost, players, myRole, image, se
 
     const descriptionEntries = Object.entries(descriptions);
     const isGuesser = myRole?.toLowerCase() === 'guesser';
+    const allSubmissionsReceived = players.length > 0 && descriptionEntries.length >= players.length - 1;
 
     return (
         <div className={styles.home}>
+            {isGuesser && !allSubmissionsReceived && (
+                <div
+                    className={`${styles.timerBanner} ${timeLeft !== null && timeLeft <= 15 ? styles.lowTime : ''}`}
+                    role="timer"
+                    aria-label={`Time remaining ${formatTime(timeLeft)}`}
+                >
+                    <span className={styles.timerLabel}>Time Remaining</span>
+                    <span className={styles.timerValue}>{formatTime(timeLeft)}</span>
+                </div>
+            )}
+
             {/* Header / Briefing Section */}
             <header className={styles.headerGroup}>
                 <div className={styles.headerBadge}>

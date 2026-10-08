@@ -59,7 +59,7 @@ export class GameSessionError extends Error {
 
 type Transaction = Prisma.TransactionClient;
 
-async function lockGame(tx: Transaction, gameId: string): Promise<party_games | null> {
+export async function lockPartyGame(tx: Transaction, gameId: string): Promise<party_games | null> {
   const rows = await tx.$queryRaw<party_games[]>`
     SELECT * FROM "party_games" WHERE "id" = ${gameId}::uuid FOR UPDATE
   `;
@@ -107,9 +107,18 @@ export class GameSession {
   }
 
   const player = await db.$transaction(async (tx) => {
-    const game = await lockGame(tx, this.game.id);
+    const game = await lockPartyGame(tx, this.game.id);
     if (!game) throw new GameSessionError('Game not found', 404);
     if (game.status !== 'waiting') throw new GameSessionError('Game has already started', 409);
+
+    const existingNames = await tx.party_players.findMany({
+      where: { game_id: game.id },
+      select: { name: true },
+    });
+    const normalizedName = trimmed.toLowerCase();
+    if (existingNames.some(({ name }) => name?.trim().toLowerCase() === normalizedName)) {
+      throw new GameSessionError('That nickname is already taken in this game', 409);
+    }
 
     const maxPlayers = game.number_players ?? MAX_PLAYERS;
 
@@ -149,7 +158,7 @@ export class GameSession {
     if (!artifact) throw new GameSessionError('Could not find an artifact - try again', 503);
 
     await db.$transaction(async (tx) => {
-      const game = await lockGame(tx, this.game.id);
+      const game = await lockPartyGame(tx, this.game.id);
 
       //game is not found error
       if (!game) throw new GameSessionError('Game not found', 404);

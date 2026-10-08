@@ -41,7 +41,8 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
         });
 
         if (!response.ok) {
-            throw new Error('Failed to join lobby');
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || 'Failed to join lobby');
         }
 
         const data = await response.json();
@@ -86,7 +87,7 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
             
         } catch (error) {
             console.error('Failed to start party session:', error);
-            setErrorMessage('Could not set up lobby. Please try again.');
+            setErrorMessage(error.message || 'Could not set up lobby. Please try again.');
         } finally {
             setIsCreating(false);
         }

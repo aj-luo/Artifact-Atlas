@@ -115,14 +115,14 @@ function ArcheologistGameplay({ imageUrl, artifactName, artifactUrl, setCurrentV
                 <div className={styles.textareaWrapper}>
                     <textarea
                         value={explanation}
-                        maxLength={500}
+                        maxLength={100}
                         onChange={handleTextChange}
                         placeholder="Provide your factual artifact description..."
                         rows={4}
                         className={styles.textarea}
                     />
                     <div className={styles.charCounter}>
-                        {explanation.length}/500
+                        {explanation.length}/100
                     </div>
                 </div>
                 <button type="submit" className={styles.submitButton}>
@@ -201,14 +201,14 @@ function ImposterGameplay({ imageUrl, gameId, setCurrentView, timeLeft }) {
                 <div className={styles.textareaWrapper}>
                     <textarea
                         value={explanation}
-                        maxLength={500}
+                        maxLength={100}
                         onChange={handleTextChange}
                         placeholder="Bluff your description to convince everyone you are the real Archeologist..."
                         rows={4}
                         className={styles.textarea}
                     />
                     <div className={styles.charCounter}>
-                        {explanation.length}/500
+                        {explanation.length}/100
                     </div>
                 </div>
                 <button type="submit" className={styles.submitButton}>
@@ -219,9 +219,8 @@ function ImposterGameplay({ imageUrl, gameId, setCurrentView, timeLeft }) {
     );
 }
 
-function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, setImage }) {
+function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, setImage, timeLeft, setTimeLeft, setGameTimerActive }) {
 
-    const [timeLeft, setTimeLeft] = useState(null);
     const [started, setStarted] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(true);
 
@@ -261,6 +260,7 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, set
                         
                         if (data.countdown_minutes != null) {
                             setTimeLeft(data.countdown_minutes * 60);
+                            setGameTimerActive(false);
                         }
                         setIsLoadingData(false);
                     }
@@ -301,27 +301,14 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, set
     }, [gameId, myRole, setImage]);
 
     useEffect(() => {
+        setGameTimerActive(started);
+    }, [started, setGameTimerActive]);
+
+    useEffect(() => {
         if (started && myRole === 'guesser') {
             setCurrentView('votingpage');
         }
     }, [started, myRole, setCurrentView]);
-
-    useEffect(() => {
-        if (!started) return;
-
-        const timer = setInterval(() => {
-            setTimeLeft((prevTime) => {
-                if (prevTime === null) return null;
-                if (prevTime <= 1) {
-                    clearInterval(timer);
-                    return 0;
-                }
-                return prevTime - 1;
-            });
-        }, 1000);
-
-        return () => clearInterval(timer);
-    }, [started]);
 
     const handleStart = async () => {
         if (isLoadingData) return;

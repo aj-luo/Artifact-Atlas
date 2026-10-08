@@ -29,7 +29,8 @@ function JoinLobby({ setCurrentView, setGameId }) {
             });
 
             if (!response.ok) {
-                setErrorMessage('Failed to join lobby. Code may be invalid or room is full.');
+                const data = await response.json().catch(() => ({}));
+                setErrorMessage(data.error || 'Failed to join lobby. Code may be invalid or room is full.');
                 setIsJoining(false);
                 return;
             }

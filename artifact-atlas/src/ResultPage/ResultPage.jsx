@@ -7,6 +7,8 @@ function ResultPage({ isCorrect, isHost, gameId, setCurrentView }) {
     const channelRef = useRef(null);
     const [starting, setStarting] = useState(false);
     const [archeologist, setArcheologist] = useState('');
+    const [archeologistDescription, setArcheologistDescription] = useState('');
+    const [artifactUrl, setArtifactUrl] = useState('');
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -18,6 +20,8 @@ function ResultPage({ isCorrect, isHost, gameId, setCurrentView }) {
                 if (response.ok) {
                     const data = await response.json();
                     setArcheologist(data.nickname);
+                    setArcheologistDescription(data.description || 'No description submitted.');
+                    setArtifactUrl(data.artifact_url || '');
                 }
             } catch (error) {
                 console.error('Failed to fetch archeologist:', error);
@@ -132,6 +136,27 @@ function ResultPage({ isCorrect, isHost, gameId, setCurrentView }) {
                             </div>
                         </div>
                     )}
+
+                    <div className={styles.revealCard}>
+                        <div className={styles.revealSection}>
+                            <span className={styles.revealLabel}>True Archeologist’s Description</span>
+                            <p className={styles.revealText}>
+                                {loading ? 'Loading…' : archeologistDescription || 'No description submitted.'}
+                            </p>
+                        </div>
+                        <div className={styles.revealSection}>
+                            <span className={styles.revealLabel}>Artifact URL</span>
+                            {loading ? (
+                                <p className={styles.revealText}>Loading…</p>
+                            ) : artifactUrl ? (
+                                <a className={styles.artifactLink} href={artifactUrl} target="_blank" rel="noreferrer">
+                                    {artifactUrl}
+                                </a>
+                            ) : (
+                                <p className={styles.revealText}>URL unavailable.</p>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Action Area */}
                     <div className={styles.actionCard}>
