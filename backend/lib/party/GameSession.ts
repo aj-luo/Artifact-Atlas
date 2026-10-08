@@ -150,6 +150,34 @@ export class GameSession {
   return { playerId: player.id };
 }
 
+  async leave(playerId: string): Promise<void> {
+    await db.$transaction(async (tx) => {
+      const game = await lockPartyGame(tx, this.game.id);
+      if (!game) throw new GameSessionError('Game not found', 404);
+      if (game.status !== 'waiting') {
+        throw new GameSessionError('Players can only leave while the game is waiting', 409);
+      }
+
+      const deleted = await tx.party_players.deleteMany({
+        where: { id: playerId, game_id: game.id },
+      });
+      if (deleted.count === 0) throw new GameSessionError('Player not found in this game', 404);
+
+      const currentPlayers = Array.isArray(game.players) ? game.players : [];
+      const remainingPlayers = currentPlayers.filter((id) => id !== playerId);
+
+      await tx.party_games.update({
+        where: { id: game.id },
+        data: {
+          revision: { increment: 1 },
+          players: remainingPlayers,
+        },
+      });
+    });
+
+    await this.refresh();
+  }
+
   //this is to help start the game
   async start({ archeologist, guesser }: { archeologist: string; guesser: string }): Promise<void> {
 

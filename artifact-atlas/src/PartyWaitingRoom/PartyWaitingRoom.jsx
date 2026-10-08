@@ -1,12 +1,17 @@
 import styles from './PartyWaitingRoom.module.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
-function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
+function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalPlayers }) {
     const [players, setPlayers] = useState([]);
     const [maxPlayers, setMaxPlayers] = useState(4);
     const [isConnecting, setIsConnecting] = useState(true);
     const [copied, setCopied] = useState(false);
+    const [isLeaving, setIsLeaving] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+    const leaveRequestSentRef = useRef(false);
+    const pendingLeaveRef = useRef(null);
+    const skipUnmountLeaveRef = useRef(false);
 
     const lobbyFull = players.length >= maxPlayers && maxPlayers > 0;
 
@@ -50,6 +55,7 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
             )
             .on('broadcast', { event: 'game-start' }, () => {
                 console.log('Game start signal received');
+                skipUnmountLeaveRef.current = true;
                 setCurrentView('gameintro');
             });
 
@@ -65,10 +71,69 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
     }, [gameId, setCurrentView]);
 
     useEffect(() => {
-        if (setTotalPlayers && players.length > 0) {
+        if (setTotalPlayers) {
             setTotalPlayers(players);
         }
     }, [players, setTotalPlayers]);
+
+    useEffect(() => {
+        if (!setIsHost || !gameId || typeof window === 'undefined') return;
+        const playerId = localStorage.getItem(`party_player_${gameId}`) || localStorage.getItem('playerId');
+        setIsHost(Boolean(playerId && players[0]?.id === playerId));
+    }, [gameId, players, setIsHost]);
+
+    const leaveRoom = useCallback(async (keepalive = false) => {
+        if (leaveRequestSentRef.current) return;
+
+        const playerId = localStorage.getItem(`party_player_${gameId}`) || localStorage.getItem('playerId');
+        if (!playerId) throw new Error('Could not identify your player. Please rejoin the lobby.');
+
+        leaveRequestSentRef.current = true;
+        try {
+            const response = await fetch(`/api/party/${gameId}/leave`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId }),
+                keepalive,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Failed to leave lobby.');
+            return playerId;
+        } catch (error) {
+            leaveRequestSentRef.current = false;
+            throw error;
+        }
+    }, [gameId]);
+
+    useEffect(() => {
+        if (!gameId) return;
+
+        if (pendingLeaveRef.current) {
+            clearTimeout(pendingLeaveRef.current);
+            pendingLeaveRef.current = null;
+        }
+        leaveRequestSentRef.current = false;
+
+        const handlePageHide = () => {
+            leaveRoom(true).catch(() => {});
+        };
+        window.addEventListener('pagehide', handlePageHide);
+
+        return () => {
+            window.removeEventListener('pagehide', handlePageHide);
+            if (pendingLeaveRef.current) clearTimeout(pendingLeaveRef.current);
+            if (skipUnmountLeaveRef.current) {
+                skipUnmountLeaveRef.current = false;
+                return;
+            }
+
+            // Defer one tick so React Strict Mode's development remount can cancel this.
+            pendingLeaveRef.current = setTimeout(() => {
+                pendingLeaveRef.current = null;
+                leaveRoom(true).catch(() => {});
+            }, 0);
+        };
+    }, [gameId, leaveRoom]);
 
     const handleCopyCode = () => {
         if (!gameId) return;
@@ -90,9 +155,30 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                 supabase.removeChannel(channel);
             }, 200);
 
+            skipUnmountLeaveRef.current = true;
             setCurrentView('gameintro');
         } catch (error) {
             console.error('Error starting game:', error);
+        }
+    };
+
+    const handleLeave = async () => {
+        setIsLeaving(true);
+        setErrorMessage('');
+        try {
+            const playerId = await leaveRoom();
+
+            localStorage.removeItem(`party_player_${gameId}`);
+            if (localStorage.getItem('playerId') === playerId) {
+                localStorage.removeItem('playerId');
+                localStorage.removeItem('nickname');
+            }
+            setTotalPlayers?.([]);
+            setIsHost?.(false);
+            setCurrentView('party');
+        } catch (error) {
+            setErrorMessage(error.message || 'Failed to leave lobby. Please try again.');
+            setIsLeaving(false);
         }
     };
 
@@ -153,12 +239,14 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                 </div>
 
                 {/* Bottom Actions */}
+                {errorMessage && <p className={styles.errorMessage} role="alert">{errorMessage}</p>}
                 <div className={styles.buttonGroup}>
                     <button 
                         className={styles.backButton} 
-                        onClick={() => setCurrentView('party')}
+                        onClick={handleLeave}
+                        disabled={isLeaving || isConnecting}
                     >
-                        Leave
+                        {isLeaving ? 'Leaving...' : 'Leave'}
                     </button>
                     {isHost && (
                         <button 
