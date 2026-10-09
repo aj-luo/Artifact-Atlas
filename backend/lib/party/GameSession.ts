@@ -128,7 +128,7 @@ export class GameSession {
     }
 
     const created = await tx.party_players.create({
-      data: { game_id: game.id, name: trimmed },
+      data: { game_id: game.id, name: trimmed, is_host: playerCount === 0 },
     });
 
     // Extract current JSON array or default to empty array
@@ -150,8 +150,53 @@ export class GameSession {
   return { playerId: player.id };
 }
 
+  async leave(playerId: string): Promise<void> {
+    await db.$transaction(async (tx) => {
+      const game = await lockPartyGame(tx, this.game.id);
+      if (!game) throw new GameSessionError('Game not found', 404);
+      if (game.status !== 'waiting') {
+        throw new GameSessionError('Players can only leave while the game is waiting', 409);
+      }
+
+      const currentPlayers = Array.isArray(game.players) ? game.players as string[] : [];
+      const existingPlayers = await tx.party_players.findMany({
+        where: { game_id: game.id },
+        select: { id: true, is_host: true },
+      });
+      const currentHostId = existingPlayers.find((player) => player.is_host)?.id ?? currentPlayers[0];
+
+      const deleted = await tx.party_players.deleteMany({
+        where: { id: playerId, game_id: game.id },
+      });
+      if (deleted.count === 0) throw new GameSessionError('Player not found in this game', 404);
+
+      const remainingPlayers = currentPlayers.filter((id) => id !== playerId);
+
+      if (currentHostId === playerId && remainingPlayers.length > 0) {
+        await tx.party_players.updateMany({
+          where: { game_id: game.id },
+          data: { is_host: false },
+        });
+        await tx.party_players.updateMany({
+          where: { id: remainingPlayers[0], game_id: game.id },
+          data: { is_host: true },
+        });
+      }
+
+      await tx.party_games.update({
+        where: { id: game.id },
+        data: {
+          revision: { increment: 1 },
+          players: remainingPlayers,
+        },
+      });
+    });
+
+    await this.refresh();
+  }
+
   //this is to help start the game
-  async start({ archeologist, guesser }: { archeologist: string; guesser: string }): Promise<void> {
+  async start({ archeologist, guesser, hostPlayerId }: { archeologist: string; guesser: string; hostPlayerId: string }): Promise<void> {
 
     //this helps get a random artifact
     const artifact = await pickRandomArtifact();
@@ -166,8 +211,22 @@ export class GameSession {
       //game is not in waiting state aka the game is in progress
       if (game.status != 'waiting') throw new GameSessionError('Game is not in waiting state', 409)
 
-      
-      const playerCount = await tx.party_players.count({where: { game_id: game.id }});
+      const players = await tx.party_players.findMany({
+        where: { game_id: game.id },
+        select: { id: true, is_host: true },
+      });
+      const rosterIds = Array.isArray(game.players) ? game.players as string[] : [];
+      const hostId = players.find((player) => player.is_host)?.id ?? rosterIds[0];
+      if (!hostPlayerId || hostPlayerId !== hostId) {
+        throw new GameSessionError('Only the host can start this game', 403);
+      }
+
+      const playerIds = new Set(players.map((player) => player.id));
+      if (!playerIds.has(archeologist) || !playerIds.has(guesser) || archeologist === guesser) {
+        throw new GameSessionError('Choose two different players from this lobby', 400);
+      }
+
+      const playerCount = players.length;
       if (playerCount < 3) throw new GameSessionError('Need at least 3 players to start', 400);
 
 

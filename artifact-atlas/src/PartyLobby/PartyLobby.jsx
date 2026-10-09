@@ -51,9 +51,9 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
         const pId = data.playerId || data.player?.id || data.id;
 
         if (pId) {
-            localStorage.setItem('playerId', pId);
-            localStorage.setItem(`party_player_${targetGameId}`, pId);
-            localStorage.setItem('nickname', nickname);
+            sessionStorage.setItem('playerId', pId);
+            sessionStorage.setItem(`party_player_${targetGameId}`, pId);
+            sessionStorage.setItem('nickname', nickname);
             console.log('Saved local player ID:', pId);
         } else {
             console.warn('No player ID returned from join API. Response was:', data);

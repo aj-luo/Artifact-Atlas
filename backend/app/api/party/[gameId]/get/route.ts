@@ -38,15 +38,18 @@ export async function GET(
         });
 
         // Map players into a dictionary for quick lookup by ID
-        const playerMap = new Map(players.map((p) => [p.id, p.name]));
+        const playerMap = new Map(players.map((player) => [player.id, player]));
+        const hasStoredHost = players.some((player) => player.is_host === true);
 
         // Preserve the exact join order defined in game.players
         const orderedPlayers = playerIds
-            .map((id) => {
-                const name = playerMap.get(id);
-                return name ? { id, name } : null;
+            .map((id, index) => {
+                const player = playerMap.get(id);
+                return player?.name
+                    ? { id, name: player.name, isHost: hasStoredHost ? player.is_host === true : index === 0 }
+                    : null;
             })
-            .filter((p): p is { id: string; name: string } => p !== null);
+            .filter((p): p is { id: string; name: string; isHost: boolean } => p !== null);
 
         return NextResponse.json({
             number_players: game.number_players,

@@ -1,17 +1,41 @@
 import styles from './PartyWaitingRoom.module.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { supabase } from '../lib/supabaseClient';
 
-function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
+function getPartyPlayerId(gameId) {
+    const scopedKey = `party_player_${gameId}`;
+    const playerId = sessionStorage.getItem(scopedKey)
+        || localStorage.getItem(scopedKey)
+        || sessionStorage.getItem('playerId')
+        || localStorage.getItem('playerId');
+
+    if (playerId && !sessionStorage.getItem(scopedKey)) {
+        sessionStorage.setItem(scopedKey, playerId);
+        sessionStorage.setItem('playerId', playerId);
+    }
+    return playerId;
+}
+
+function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalPlayers }) {
     const [players, setPlayers] = useState([]);
     const [maxPlayers, setMaxPlayers] = useState(4);
     const [isConnecting, setIsConnecting] = useState(true);
     const [copied, setCopied] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
+    const [isLeaving, setIsLeaving] = useState(false);
+    const [errorMessage, setErrorMessage] = useState('');
+    const [joinUrl, setJoinUrl] = useState('');
+    const leaveRequestSentRef = useRef(false);
+    const pendingLeaveRef = useRef(null);
+    const skipUnmountLeaveRef = useRef(false);
 
     const lobbyFull = players.length >= maxPlayers && maxPlayers > 0;
 
     useEffect(() => {
         if (!gameId) return;
+
+        setJoinUrl(`${window.location.origin}/?join=${encodeURIComponent(gameId)}`);
 
         const fetchInitialState = async () => {
             try {
@@ -50,6 +74,7 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
             )
             .on('broadcast', { event: 'game-start' }, () => {
                 console.log('Game start signal received');
+                skipUnmountLeaveRef.current = true;
                 setCurrentView('gameintro');
             });
 
@@ -65,16 +90,86 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
     }, [gameId, setCurrentView]);
 
     useEffect(() => {
-        if (setTotalPlayers && players.length > 0) {
+        if (setTotalPlayers) {
             setTotalPlayers(players);
         }
     }, [players, setTotalPlayers]);
+
+    useEffect(() => {
+        if (!setIsHost || !gameId || typeof window === 'undefined') return;
+        const playerId = getPartyPlayerId(gameId);
+        setIsHost(Boolean(playerId && players.some((player) => player.id === playerId && player.isHost)));
+    }, [gameId, players, setIsHost]);
+
+    const leaveRoom = useCallback(async (keepalive = false) => {
+        if (leaveRequestSentRef.current) return;
+
+        const playerId = getPartyPlayerId(gameId);
+        if (!playerId) throw new Error('Could not identify your player. Please rejoin the lobby.');
+
+        leaveRequestSentRef.current = true;
+        try {
+            const response = await fetch(`/api/party/${gameId}/leave`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ playerId }),
+                keepalive,
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(data.error || 'Failed to leave lobby.');
+            return playerId;
+        } catch (error) {
+            leaveRequestSentRef.current = false;
+            throw error;
+        }
+    }, [gameId]);
+
+    useEffect(() => {
+        if (!gameId) return;
+
+        if (pendingLeaveRef.current) {
+            clearTimeout(pendingLeaveRef.current);
+            pendingLeaveRef.current = null;
+        }
+        leaveRequestSentRef.current = false;
+
+        const handlePageHide = () => {
+            leaveRoom(true).catch(() => {});
+        };
+        window.addEventListener('pagehide', handlePageHide);
+
+        return () => {
+            window.removeEventListener('pagehide', handlePageHide);
+            if (pendingLeaveRef.current) clearTimeout(pendingLeaveRef.current);
+            if (skipUnmountLeaveRef.current) {
+                skipUnmountLeaveRef.current = false;
+                return;
+            }
+
+            // Defer one tick so React Strict Mode's development remount can cancel this.
+            pendingLeaveRef.current = setTimeout(() => {
+                pendingLeaveRef.current = null;
+                leaveRoom(true).catch(() => {});
+            }, 0);
+        };
+    }, [gameId, leaveRoom]);
 
     const handleCopyCode = () => {
         if (!gameId) return;
         navigator.clipboard.writeText(gameId);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleCopyJoinLink = async () => {
+        if (!joinUrl) return;
+        try {
+            await navigator.clipboard.writeText(joinUrl);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 2000);
+        } catch (error) {
+            setErrorMessage('Could not copy the join link. Please copy it from the link below.');
+        }
     };
 
     const handleStartGame = async () => {
@@ -90,9 +185,32 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                 supabase.removeChannel(channel);
             }, 200);
 
+            skipUnmountLeaveRef.current = true;
             setCurrentView('gameintro');
         } catch (error) {
             console.error('Error starting game:', error);
+        }
+    };
+
+    const handleLeave = async () => {
+        setIsLeaving(true);
+        setErrorMessage('');
+        try {
+            const playerId = await leaveRoom();
+
+            sessionStorage.removeItem(`party_player_${gameId}`);
+            if (sessionStorage.getItem('playerId') === playerId) {
+                sessionStorage.removeItem('playerId');
+                sessionStorage.removeItem('nickname');
+            }
+            if (localStorage.getItem(`party_player_${gameId}`) === playerId) localStorage.removeItem(`party_player_${gameId}`);
+            if (localStorage.getItem('playerId') === playerId) localStorage.removeItem('playerId');
+            setTotalPlayers?.([]);
+            setIsHost?.(false);
+            setCurrentView('party');
+        } catch (error) {
+            setErrorMessage(error.message || 'Failed to leave lobby. Please try again.');
+            setIsLeaving(false);
         }
     };
 
@@ -126,6 +244,26 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                     </div>
                 </div>
 
+                <div className={styles.qrSection}>
+                    <span className={styles.sectionLabel}>SCAN TO JOIN</span>
+                    {joinUrl && (
+                        <div className={styles.qrCode}>
+                            <QRCodeSVG value={joinUrl} size={176} level="M" includeMargin />
+                        </div>
+                    )}
+                    <p className={styles.qrHint}>Scan to open the join page with this lobby code filled in.</p>
+                    {joinUrl && (
+                        <>
+                            <a className={styles.joinLink} href={joinUrl} target="_blank" rel="noreferrer">
+                                {joinUrl}
+                            </a>
+                            <button className={styles.copyLinkButton} type="button" onClick={handleCopyJoinLink}>
+                                {linkCopied ? 'LINK COPIED!' : 'COPY JOIN LINK'}
+                            </button>
+                        </>
+                    )}
+                </div>
+
                 {/* Live Player List Section */}
                 <div className={styles.playerSection}>
                     <div className={styles.playerHeader}>
@@ -138,7 +276,7 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                             <div key={p.id || index} className={styles.playerCard}>
                                 <div className={styles.avatar}>👤</div>
                                 <span className={styles.playerName}>{p.name}</span>
-                                {index === 0 && <span className={styles.hostBadge}>HOST</span>}
+                                {p.isHost && <span className={styles.hostBadge}>HOST</span>}
                             </div>
                         ))}
 
@@ -153,12 +291,14 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setTotalPlayers }) {
                 </div>
 
                 {/* Bottom Actions */}
+                {errorMessage && <p className={styles.errorMessage} role="alert">{errorMessage}</p>}
                 <div className={styles.buttonGroup}>
                     <button 
                         className={styles.backButton} 
-                        onClick={() => setCurrentView('party')}
+                        onClick={handleLeave}
+                        disabled={isLeaving || isConnecting}
                     >
-                        Leave
+                        {isLeaving ? 'Leaving...' : 'Leave'}
                     </button>
                     {isHost && (
                         <button 

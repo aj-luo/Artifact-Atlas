@@ -46,6 +46,14 @@ export default function Home() {
   const [isCorrect, setIsCorrect] = useState(false);
 
   useEffect(() => {
+    const joinCode = new URLSearchParams(window.location.search).get('join');
+    if (joinCode) {
+      setGameId(joinCode);
+      setCurrentView('joinlobby');
+    }
+  }, []);
+
+  useEffect(() => {
     if (!gameTimerActive || !['gamePlay', 'votingpage'].includes(currentView)) return;
 
     const timer = setInterval(() => {
@@ -76,7 +84,7 @@ export default function Home() {
       case 'partylobby':
         return <PartyLobby setCurrentView={setCurrentView} setGameId={setGameId} setIsHost={setIsHost}/>;
       case 'partywaitingroom':
-        return <PartyWaitingRoom setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} setTotalPlayers={setTotalPlayers}/>;
+        return <PartyWaitingRoom setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} setIsHost={setIsHost} setTotalPlayers={setTotalPlayers}/>;
       case 'joinlobby':
         return <JoinLobby setCurrentView={setCurrentView} setGameId={setGameId}/>;
       case 'gameintro':
