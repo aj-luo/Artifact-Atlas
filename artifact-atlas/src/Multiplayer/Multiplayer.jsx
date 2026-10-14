@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import styles from './Multiplayer.module.css';
-import archelogists from '../assets/archeologists.png';
+import archelogists from '../assets/multiplayer_archeologists.png';
 
 function Multiplayer({ setCurrentView }) {
     return (
