@@ -4,6 +4,7 @@ import { db } from '@/lib/db';
 import { pickRandomArtifact } from '@/lib/artifactSelector';
 import { readRoomSnapshot } from './roomSnapshot';
 import { GameSession, GameSessionError, MAX_PLAYERS, databaseNow } from './GameSession';
+import { reportBroadcastConfiguration } from './broadcastReadiness';
 
 type Tx = Prisma.TransactionClient;
 export const isUuid = (value: unknown): value is string => typeof value === 'string'
@@ -170,10 +171,10 @@ export async function authorizeGuess(gameId: string, token: string, playerId: st
 }
 
 export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnType<typeof roomSnapshot>>) {
+  if (!reportBroadcastConfiguration(roomId)) return;
   try {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    if (!url || !key) throw new Error('Room broadcast environment is not configured');
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim().replace(/\/+$/, '');
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY!.trim();
     // Join responses include private identity fields; never send them to the room.
     const { credential: _credential, memberId: _memberId, ...payload } =
       (snapshot ?? await roomSnapshot(roomId)) as Awaited<ReturnType<typeof roomSnapshot>>
@@ -183,5 +184,7 @@ export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnTyp
       body: JSON.stringify({ messages: [{ topic: `room-${roomId}`, event: 'room_update', payload }] }),
     });
     if (!response.ok) throw new Error(`Broadcast failed: ${response.status}`);
-  } catch (error) { console.error('[room broadcast]', error); }
+  } catch (error) { console.error('[multiplayer/broadcast:failure]', JSON.stringify({
+    roomId, sessionId: snapshot?.currentSessionId, error: String(error),
+  })); }
 }

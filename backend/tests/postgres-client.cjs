@@ -2,7 +2,7 @@
 // migrations run in PostgreSQL (PGlite). Its single connection serializes tests;
 // production multi-connection lock contention still requires real Postgres.
 function postgresClient(pg) {
-  const tables = ['multiplayer_rooms', 'multiplayer_room_members', 'multiplayer_games', 'multiplayer_players', 'multiplayer_guesses'];
+  const tables = ['multiplayer_rooms', 'multiplayer_room_members', 'multiplayer_games', 'multiplayer_players', 'multiplayer_guesses', 'multiplayer_round_resolution_claims'];
   const relations = {
     'multiplayer_games.players': ['multiplayer_players', 'game_id', 'id'],
     'multiplayer_room_members.participations': ['multiplayer_players', 'member_id', 'id'],
