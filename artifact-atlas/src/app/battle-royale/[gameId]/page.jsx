@@ -13,6 +13,7 @@ import '../battleRoyale.css';
 import RoundResultCard from '../RoundResultCard';
 import RoomHistory from '../RoomHistory';
 import AutoAdvanceSwitch from '../AutoAdvanceSwitch';
+import BattleRoyaleHelp from '../BattleRoyaleHelp';
 
 countries.registerLocale(enLocale);
 const omittedCountries = ['AS', 'IO', 'CW', 'GG', 'GU', 'IM', 'JE', 'PS', 'SX', 'VI', 'AX', 'XK'];
@@ -43,12 +44,12 @@ export default function BattleRoyaleRoom() {
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(currentYear);
   const [yearInput, setYearInput] = useState(String(currentYear));
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pendingGuess, setPendingGuess] = useState(null);
   const pendingGuessRef = useRef(null);
   const statusRequestRef = useRef(null);
   const lastExpiryRequestRef = useRef(-Infinity);
   const [, tickPhase] = useState(0);
-  const submissionScope = `${gameId}:${gameState?.currentSessionId}:${gameState?.currentRound}:${gameState?.status}`;
+  const submissionScope = `${gameId}:${gameState?.currentSessionId}:${gameState?.currentRound}:${gameState?.status}:${playerId}`;
   const submissionScopeRef = useRef(submissionScope);
   submissionScopeRef.current = submissionScope;
   const [isStarting, setIsStarting] = useState(false);
@@ -108,18 +109,25 @@ export default function BattleRoyaleRoom() {
     }
     setStatusError(null);
     setGameState(data);
+    const pending = pendingGuessRef.current;
+    if (pending && data.currentSessionId === pending.sessionId && data.currentRound === pending.round
+      && data.players?.some(p => p.id === pending.playerId && p.hasGuessedThisRound)) {
+      pendingGuessRef.current = null;
+      setPendingGuess(null);
+      setStartError(null);
+    }
     return true;
-  }, [gameId]);
+  }, []);
 
   // Clear all session-local input and overlays after a rematch or reconnect.
   useEffect(() => {
     setSelectedCountry('');
     setSelectedYear(new Date().getFullYear());
     setYearInput(String(new Date().getFullYear()));
-    setIsSubmitting(false);
+    setPendingGuess(null);
     pendingGuessRef.current = null;
     setIsHistoryOpen(false);
-  }, [gameState?.currentSessionId, gameState?.status, gameState?.currentRound]);
+  }, [gameId, gameState?.currentSessionId, gameState?.status, gameState?.currentRound]);
 
   // Stable callback — only recreated when gameId changes
   const fetchStatus = useCallback(async () => {
@@ -133,11 +141,23 @@ export default function BattleRoyaleRoom() {
       request.queued = false;
       const requestedRevision = latestRevisionRef.current;
       try {
+        const verifyingPending = pendingGuessRef.current?.verifying ? pendingGuessRef.current : null;
         const requestedAt = Date.now();
         const res = await fetch(`/api/rooms/${gameId}/status`);
         if (res.ok) {
           const data = await res.json();
-          applySnapshot(data, requestedAt, Date.now(), Number(res.headers.get('X-Room-Processing-Ms') ?? 0));
+          const applied = applySnapshot(data, requestedAt, Date.now(), Number(res.headers.get('X-Room-Processing-Ms') ?? 0));
+          // A lost POST response needs a status read begun after the failure
+          // before the player can safely try again.
+          if (applied && verifyingPending && pendingGuessRef.current === verifyingPending
+            && submissionScopeRef.current === verifyingPending.scope
+            && data.currentSessionId === verifyingPending.sessionId
+            && data.currentRound === verifyingPending.round
+            && data.players?.some(p => p.id === verifyingPending.playerId && !p.hasGuessedThisRound)) {
+            pendingGuessRef.current = null;
+            setPendingGuess(null);
+            setStartError('Unable to confirm your guess. Please try again.');
+          }
         } else if (roomIdRef.current === gameId && latestRevisionRef.current === requestedRevision) {
           setStatusError('Unable to refresh room. Reconnecting…');
         }
@@ -272,14 +292,20 @@ export default function BattleRoyaleRoom() {
   };
 
   const submitGuess = async () => {
-    if (!playerId || !selectedCountry || pendingGuessRef.current) return;
+    if (!playerId || !selectedCountry || pendingGuessRef.current?.scope === submissionScope) return;
     const serverNow = Date.now() + serverClockOffsetRef.current;
     if (!getRoomPhase(gameState, serverNow).canGuess) return;
     const alpha3 = countries.alpha2ToAlpha3(selectedCountry);
     if (!alpha3) return;
-    const pending = { scope: submissionScope };
+    const pending = {
+      scope: submissionScope,
+      sessionId: gameState.currentSessionId,
+      round: gameState.currentRound,
+      playerId,
+      verifying: false,
+    };
     pendingGuessRef.current = pending;
-    setIsSubmitting(true);
+    setPendingGuess(pending);
     setStartError(null);
     try {
       const requestedAt = Date.now();
@@ -293,25 +319,30 @@ export default function BattleRoyaleRoom() {
       // so the UI updates within network RTT rather than waiting for the next poll.
       if (res.ok) {
         const data = await res.json();
+        if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
         applySnapshot(data, requestedAt, Date.now());
       } else {
-        // Accept an attached snapshot when available, then recover current state.
         const data = await res.json().catch(() => null);
         if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
         if (data?.revision != null) applySnapshot(data);
-        setStartError(data?.error ?? 'Guess was not accepted');
-        void fetchStatus();
+        if (pendingGuessRef.current !== pending) return;
+        if (res.status >= 500 || !data?.error) {
+          pending.verifying = true;
+          setStartError('Unable to confirm your guess. Reconnecting…');
+          void fetchStatus();
+        } else {
+          pendingGuessRef.current = null;
+          setPendingGuess(null);
+          setStartError(data?.error ?? 'Guess was not accepted');
+          void fetchStatus();
+        }
       }
     } catch (err) {
       console.error(err);
       if (pendingGuessRef.current === pending && submissionScopeRef.current === pending.scope) {
+        pending.verifying = true;
         setStartError('Unable to confirm your guess. Reconnecting…');
         void fetchStatus();
-      }
-    } finally {
-      if (pendingGuessRef.current === pending) {
-        pendingGuessRef.current = null;
-        setIsSubmitting(false);
       }
     }
   };
@@ -438,10 +469,10 @@ export default function BattleRoyaleRoom() {
               <div className="br-eliminated">You were eliminated. Spectating…</div>
             ) : !isIntermission && timeRemaining === 0 ? (
               <div className="br-waiting">Time’s up — loading results…</div>
-            ) : me?.hasGuessedThisRound ? (
+            ) : me?.hasGuessedThisRound || pendingGuess?.scope === submissionScope ? (
               <div className="br-waiting">{guessedCount === activePlayers.length ? 'Loading results…' : 'Guess submitted — waiting for others…'}</div>
             ) : (
-              <fieldset className="br-guess-panel" disabled={isSubmitting} inert={isSubmitting} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+              <fieldset className="br-guess-panel" style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
                 <p className="br-guess-prompt">Where is this artifact from?</p>
                 <ReactFlagsSelect
                   selected={selectedCountry}
@@ -464,9 +495,9 @@ export default function BattleRoyaleRoom() {
                 <button
                   className="br-btn br-btn-primary"
                   onClick={submitGuess}
-                  disabled={isSubmitting || !selectedCountry || isIntermission || timeRemaining === 0}
+                  disabled={!selectedCountry || isIntermission || timeRemaining === 0}
                 >
-                  {isSubmitting ? 'Sending guess…' : 'SUBMIT GUESS'}
+                  SUBMIT GUESS
                 </button>
               </fieldset>
             )}
@@ -519,7 +550,7 @@ export default function BattleRoyaleRoom() {
           </div>
         )}
         <div className="br-leaderboard">
-          {sorted.map((p, i) => (
+          {sorted.map(p => (
             <div key={p.id} className={`br-lb-row ${p.finalPlacement === 1 ? 'winner' : ''}`}>
               <span className="br-lb-rank">{p.finalPlacement == null ? '—' : MEDALS[p.finalPlacement - 1] ?? `#${p.finalPlacement}`}</span>
               <span className="br-lb-name">
@@ -552,7 +583,8 @@ export default function BattleRoyaleRoom() {
 
   if (!gameState) {
     return (
-      <div className="br-page">
+      <div className="br-page br-page-with-help">
+        <BattleRoyaleHelp />
         <div className="br-loading">{statusError ?? startError ?? 'Loading Battle Royale…'}</div>
       </div>
     );
@@ -560,7 +592,8 @@ export default function BattleRoyaleRoom() {
 
   if (!isMember && gameState.status === 'waiting') {
     return (
-      <div className="br-page">
+      <div className="br-page br-page-with-help">
+        <BattleRoyaleHelp />
         <div className="br-card br-join-card">
           <h2>Join Room</h2>
           {statusError && <p className="br-error" role="status">{statusError}</p>}
@@ -587,7 +620,8 @@ export default function BattleRoyaleRoom() {
   }
 
   return (
-    <div className="br-page">
+    <div className="br-page br-page-with-help">
+      <BattleRoyaleHelp />
       {statusError && <p className="br-error" role="status">{statusError}</p>}
       {startError && <p className="br-error" role="alert">{startError}</p>}
       {gameState.status === 'waiting'  && renderLobby()}

@@ -7,6 +7,7 @@ import './battleRoyale.css';
 import logo from '../../assets/AA_logo.png';
 import multiplayer from '../../assets/multiplayer.png';
 import AutoAdvanceSwitch from './AutoAdvanceSwitch';
+import BattleRoyaleHelp from './BattleRoyaleHelp';
 
 export default function BattleRoyaleLobby() {
   const router = useRouter();
@@ -73,7 +74,8 @@ export default function BattleRoyaleLobby() {
   };
 
   return (
-    <div className="br-page">
+    <div className="br-page br-page-with-help">
+      <BattleRoyaleHelp />
       <div className="br-header">
         <img src={logo.src} className="br-logo" alt="Artifact Atlas" />
         <h1 className="br-title">BATTLE ROYALE</h1>
