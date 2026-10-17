@@ -56,6 +56,7 @@ export default function BattleRoyaleRoom() {
   const [startError, setStartError] = useState(null);
   const [statusError, setStatusError] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [finishedView, setFinishedView] = useState('standings');
   const debounceRef = useRef(null);
   const latestRevisionRef = useRef(-1);
   const serverClockOffsetRef = useRef(0);
@@ -68,6 +69,7 @@ export default function BattleRoyaleRoom() {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => () => { pendingGuessRef.current = null; }, []);
+  useEffect(() => { setFinishedView('standings'); }, [gameState?.currentSessionId]);
 
   useEffect(() => {
     latestRevisionRef.current = -1;
@@ -539,7 +541,13 @@ export default function BattleRoyaleRoom() {
     const sorted = [...gameState.players].sort((a, b) => (a.finalPlacement ?? Infinity) - (b.finalPlacement ?? Infinity));
     const winners = sorted.filter(p => p.finalPlacement === 1);
     return (
-      <div className="br-finished">
+      <div className={`br-finished is-${finishedView}${gameState.lastRoundReveal ? ' has-result' : ''}`}>
+        {gameState.lastRoundReveal && (
+          <div className="br-finished-tabs" role="group" aria-label="Game results">
+            <button type="button" aria-pressed={finishedView === 'standings'} onClick={() => setFinishedView('standings')}>Standings</button>
+            <button type="button" aria-pressed={finishedView === 'round'} onClick={() => setFinishedView('round')}>Final round</button>
+          </div>
+        )}
         <div className="br-finished-summary">
           <h2 className="br-finished-title">GAME OVER</h2>
           <h1 className="br-winner-name">{winners.length ? `${winners.map(p => p.name).join(' & ')} ${winners.length > 1 ? 'are joint winners!' : 'Wins!'}` : 'Placements unavailable'}</h1>
@@ -555,12 +563,6 @@ export default function BattleRoyaleRoom() {
               </div>
             ))}
           </div>
-          <button
-            className="br-history-button br-finished-history"
-            onClick={() => setIsHistoryOpen(true)}
-          >
-            History
-          </button>
           <div className="br-finished-actions">
             <button className="br-btn br-btn-secondary" onClick={() => router.push('/')}>
               HOME
@@ -632,7 +634,7 @@ export default function BattleRoyaleRoom() {
         ? <div className="br-waiting" role="status">Round complete — syncing results…</div>
         : renderFinished())}
       {gameState.status === 'waiting' && isMember && <button className="br-btn br-btn-leave" disabled={isStarting} onClick={() => roomAction('leave')}>Leave Room</button>}
-      {!revealPending && <RoomHistory key={gameId} roomId={gameId} revision={gameState.revision} />}
+      {!revealPending && <RoomHistory key={gameId} roomId={gameId} revision={gameState.revision} onOpenRoundHistory={gameState.status === 'finished' ? () => setIsHistoryOpen(true) : undefined} />}
       {isHistoryOpen && !revealPending && (
         <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
           <div className="br-history-panel">

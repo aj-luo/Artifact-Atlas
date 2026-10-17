@@ -11,7 +11,7 @@ async function getRoomData(path, signal) {
   return data;
 }
 
-export default function RoomHistory({ roomId, revision }) {
+export default function RoomHistory({ roomId, revision, onOpenRoundHistory }) {
   const [tab, setTab] = useState(null);
   const [members, setMembers] = useState(null);
   const [history, setHistory] = useState(null);
@@ -86,6 +86,7 @@ export default function RoomHistory({ roomId, revision }) {
 
   return <section className="br-room-history" aria-label="Room history">
     <div className="br-room-tabs">
+      {onOpenRoundHistory && <button className="br-history-button" onClick={onOpenRoundHistory}>History</button>}
       <button className="br-history-button" aria-haspopup="dialog" aria-expanded={tab === 'standings'} onClick={event => open('standings', event)}>Room Standings</button>
       <button className="br-history-button" aria-haspopup="dialog" aria-expanded={tab === 'sessions'} onClick={event => open('sessions', event)}>Sessions</button>
     </div>
