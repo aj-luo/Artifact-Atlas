@@ -10,6 +10,79 @@
   padding: 2rem;
 }
 
+.br-page-with-help { padding-top: 5rem; }
+
+.br-help-trigger {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 50;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 50%;
+  background: #242424;
+  color: #fff;
+  font: inherit;
+  font-size: 1.4rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.br-help-trigger:hover,
+.br-help-close:hover { background: #383838; }
+
+.br-help-trigger:focus-visible,
+.br-help-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.br-help-dialog {
+  width: min(520px, calc(100% - 2rem));
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 12px;
+  background: #242424;
+  color: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+}
+
+.br-help-dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+
+.br-help-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.br-help-header h2 { margin: 0; font-size: 1.4rem; }
+
+.br-help-close {
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.br-help-dialog p,
+.br-help-dialog li { color: #ddd; line-height: 1.5; }
+.br-help-dialog p { margin: 1rem 0 0; }
+.br-help-dialog ul { margin: 1rem 0; padding-left: 1.3rem; }
+.br-help-dialog li + li { margin-top: 0.6rem; }
+.br-help-dialog strong { color: #fff; }
+
 .br-loading {
   margin-top: 30vh;
   font-size: 1.4rem;
@@ -205,39 +278,69 @@
 
 /* ── Landing page (create / join) ──────────────────────────────────────────── */
 
-.br-container {
+.br-landing .br-header {
+  margin-bottom: 1.5rem;
+}
+
+.br-landing .br-title {
+  font-size: clamp(1.55rem, 7vw, 3rem);
+  text-align: center;
+}
+
+.br-landing .br-container {
   display: flex;
   flex-direction: column;
   gap: 2rem;
   width: 100%;
-  max-width: 1120px;
+  max-width: 500px;
   animation: fadeInUp 0.8s ease-out;
 }
 
-.br-home-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(340px, 500px);
-  gap: clamp(2rem, 5vw, 5rem);
+.br-landing .br-home-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   align-items: center;
 }
 
-.br-home-artwork {
+.br-landing .br-home-artwork {
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: 100%;
 }
 
-.br-home-artwork img {
+.br-landing .br-home-artwork img {
   width: 100%;
+  max-width: 320px;
   height: auto;
-  max-height: 620px;
   object-fit: contain;
   filter: drop-shadow(0 20px 32px rgba(0, 0, 0, 0.4));
 }
 
-.br-home-controls {
+.br-landing .br-home-controls {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  width: 100%;
+}
+
+.br-landing .br-home-panels {
+  display: grid;
+  width: 100%;
+}
+
+.br-landing .br-home-panels > .br-card {
+  grid-area: 1 / 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.br-landing .br-home-panels > .br-card[aria-hidden="true"] {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .br-action-toggle {
@@ -317,11 +420,6 @@
 .br-switch-thumb { width: 18px; height: 18px; border-radius: 50%; background: #fff; }
 .br-auto-advance-switch[aria-checked="true"] .br-switch-track { background: #fff; border-color: #fff; }
 .br-auto-advance-switch[aria-checked="true"] .br-switch-thumb { transform: translateX(18px); background: #181818; }
-
-@media (max-width: 800px) {
-  .br-home-layout { grid-template-columns: 1fr; gap: 1rem; }
-  .br-home-artwork { max-width: 560px; margin: 0 auto; }
-}
 
 /* ── Lobby ─────────────────────────────────────────────────────────────────── */
 
@@ -1058,6 +1156,7 @@
 
 @media (max-width: 650px) {
   .br-page { padding: 1rem; }
+  .br-page-with-help { padding-top: 4.5rem; }
   .br-top-bar { gap: 0.5rem; flex-wrap: wrap; }
   .br-reveal-player { grid-template-columns: 1fr auto; gap: 0.35rem 0.75rem; }
   .br-reveal-player-guess { grid-column: 1 / -1; }

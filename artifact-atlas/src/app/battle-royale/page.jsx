@@ -7,6 +7,7 @@ import './battleRoyale.css';
 import logo from '../../assets/AA_logo.png';
 import multiplayer from '../../assets/multiplayer.png';
 import AutoAdvanceSwitch from './AutoAdvanceSwitch';
+import BattleRoyaleHelp from './BattleRoyaleHelp';
 
 export default function BattleRoyaleLobby() {
   const router = useRouter();
@@ -73,7 +74,8 @@ export default function BattleRoyaleLobby() {
   };
 
   return (
-    <div className="br-page">
+    <div className="br-page br-page-with-help br-landing">
+      <BattleRoyaleHelp />
       <div className="br-header">
         <img src={logo.src} className="br-logo" alt="Artifact Atlas" />
         <h1 className="br-title">BATTLE ROYALE</h1>
@@ -108,8 +110,8 @@ export default function BattleRoyaleLobby() {
               </button>
             </div>
 
-            {lobbyAction === 'create' ? (
-              <div className="br-card">
+            <div className="br-home-panels">
+              <div className="br-card" aria-hidden={lobbyAction !== 'create'} inert={lobbyAction !== 'create'}>
                 <h2>Create a Game</h2>
                 <p>Host a new game and invite your friends.</p>
 
@@ -140,8 +142,7 @@ export default function BattleRoyaleLobby() {
                   {isCreating ? 'CREATING...' : 'CREATE NEW GAME'}
                 </button>
               </div>
-            ) : (
-              <div className="br-card">
+              <div className="br-card" aria-hidden={lobbyAction !== 'join'} inert={lobbyAction !== 'join'}>
                 <h2>Join a Game</h2>
                 <p>Have a game code? Enter it below to join.</p>
 
@@ -158,7 +159,7 @@ export default function BattleRoyaleLobby() {
                   </button>
                 </form>
               </div>
-            )}
+            </div>
           </div>
         </div>
 

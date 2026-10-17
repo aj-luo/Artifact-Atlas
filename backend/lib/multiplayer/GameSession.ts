@@ -1,4 +1,5 @@
 import { rankPlayers } from './placements';
+import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db';
 import { pickRandomArtifact, type SelectedArtifact } from '@/lib/artifactSelector';
 import { ScoringModule, type ScoreResult } from './scoring';
@@ -99,12 +100,53 @@ function resolutionTiming(): ResolutionTiming {
     playerUpdatesMs: 0, placementMs: 0, finalGameUpdateMs: 0 };
 }
 
-function reportResolution(timing: ResolutionTiming, started: number, resolved: boolean) {
+function reportResolution(timing: ResolutionTiming, started: number, resolved: boolean, game?: multiplayer_games) {
   const tenth = (ms: number) => Math.round(ms * 10) / 10;
   console.info('[multiplayer/resolve:timing]', JSON.stringify({
     ...Object.fromEntries(Object.entries(timing).map(([key, value]) => [key, tenth(value)])),
     totalMs: tenth(performance.now() - started), resolved,
+    roomId: game?.room_id, sessionId: game?.id, round: game?.current_round,
   }));
+}
+
+const RESOLUTION_TRANSACTION_OPTIONS = { maxWait: 2000, timeout: 10000 };
+const isTransactionTimeout = (error: unknown) => typeof error === 'object' && error !== null
+  && 'code' in error && error.code === 'P2028';
+
+async function claimRound(game: multiplayer_games, token: string): Promise<boolean> {
+  const inserted = await db.$queryRaw<Array<{ claim_token: string }>>`
+    INSERT INTO multiplayer_round_resolution_claims (session_id, round_number, claim_token, expires_at)
+    VALUES (${game.id}::uuid, ${game.current_round}, ${token}::uuid, clock_timestamp() + interval '30 seconds')
+    ON CONFLICT (session_id, round_number) DO NOTHING
+    RETURNING claim_token
+  `;
+  const takenOver = inserted.length ? [] : await db.$queryRaw<Array<{ claim_token: string }>>`
+    WITH expired AS (
+      SELECT session_id, round_number FROM multiplayer_round_resolution_claims
+      WHERE session_id = ${game.id}::uuid AND round_number = ${game.current_round}
+        AND expires_at < clock_timestamp()
+      FOR UPDATE SKIP LOCKED
+    )
+    UPDATE multiplayer_round_resolution_claims AS claim
+    SET claim_token = ${token}::uuid, expires_at = clock_timestamp() + interval '30 seconds'
+    FROM expired
+    WHERE claim.session_id = expired.session_id AND claim.round_number = expired.round_number
+    RETURNING claim.claim_token
+  `;
+  const acquired = inserted.length > 0 || takenOver.length > 0;
+  const outcome = inserted.length ? 'acquired' : takenOver.length ? 'taken_over' : 'held';
+  console.info('[multiplayer/resolve:claim]', JSON.stringify({
+    roomId: game.room_id, sessionId: game.id, round: game.current_round, outcome,
+  }));
+  return acquired;
+}
+
+async function releaseClaim(game: multiplayer_games, token: string): Promise<void> {
+  await db.$queryRaw`
+    DELETE FROM multiplayer_round_resolution_claims
+    WHERE session_id = ${game.id}::uuid AND round_number = ${game.current_round}
+      AND claim_token = ${token}::uuid
+  `;
 }
 
 //lock the game row for update to prevent race conditions when multiple players are joining the same game at the same time. This is used in the join method to ensure that the player count is accurate and that the game is still in waiting state before allowing a new player to join.
@@ -232,6 +274,7 @@ export class GameSession {
     const normalizedCountry = country.toUpperCase();
     const activePlayerCount = this.players.filter((player) => !player.is_eliminated).length;
     const likelyToResolve = this.roundGuesses.length + 1 >= activePlayerCount;
+    const resolutionGame = this.game;
     const resolveStarted = performance.now();
     const timing = resolutionTiming();
     // Artifact selection can require database work. Keep ordinary guesses on the
@@ -308,7 +351,7 @@ export class GameSession {
     });
 
     if (refresh) await this.refresh();
-    if (timing.readsMs) reportResolution(timing, resolveStarted, result.late ? result.resolved : result.roundResolved);
+    if (timing.readsMs) reportResolution(timing, resolveStarted, result.late ? result.resolved : result.roundResolved, resolutionGame);
     if (result.late) {
       throw new GameSessionError('Round has ended; this guess was not accepted', 409, result.resolved);
     }
@@ -321,12 +364,22 @@ export class GameSession {
     const timing = resolutionTiming();
     let initialized = false;
     if (!this.game.round_ends_at) {
-      initialized = await db.$transaction(async (tx) => {
-        const game = await lockGame(tx, this.game.id);
-        if (!game || game.status !== 'active' || game.awaiting_host || game.round_ends_at) return false;
-        await initializeRoundWindow(tx, game, await databaseNow(tx));
-        return true;
-      });
+      try {
+        initialized = await db.$transaction(async (tx) => {
+          const game = await lockGame(tx, this.game.id);
+          if (!game || game.status !== 'active' || game.awaiting_host || game.round_ends_at) return false;
+          await initializeRoundWindow(tx, game, await databaseNow(tx));
+          return true;
+        }, RESOLUTION_TRANSACTION_OPTIONS);
+      } catch (error) {
+        if (!isTransactionTimeout(error)) throw error;
+        console.error('[multiplayer/resolve:transaction-timeout]', JSON.stringify({
+          roomId: this.game.room_id, sessionId: this.game.id, round: this.game.current_round,
+          durationMs: Math.round(performance.now() - resolveStarted),
+        }));
+        await this.refresh();
+        return false;
+      }
       await this.refresh();
     }
     const timerExpired = this.game.round_ends_at !== null && (await databaseNow(db)) >= this.game.round_ends_at;
@@ -336,19 +389,45 @@ export class GameSession {
 
     const needsArtifact = this.game.current_round < this.game.max_rounds
       && this.players.filter(player => !player.is_eliminated).length > 1;
-    const selectionStarted = performance.now();
-    const nextArtifact = needsArtifact ? await pickRandomArtifact() : null;
-    timing.selectionMs = performance.now() - selectionStarted;
-    const resolved = await db.$transaction(async (tx) => {
-      const lockStarted = performance.now();
-      const game = await lockGame(tx, this.game.id);
-      timing.lockWaitMs = performance.now() - lockStarted;
-      if (!game || game.status !== 'active') return false;
-      return this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact, timing);
-    });
-    if (resolved) await this.refresh();
-    reportResolution(timing, resolveStarted, resolved);
-    return resolved || initialized;
+    const claimedGame = this.game;
+    const token = randomUUID();
+    if (!await claimRound(claimedGame, token)) return initialized;
+    try {
+      const selectionStarted = performance.now();
+      const nextArtifact = needsArtifact ? await pickRandomArtifact() : null;
+      timing.selectionMs = performance.now() - selectionStarted;
+      const resolved = await db.$transaction(async (tx) => {
+        const lockStarted = performance.now();
+        const game = await lockGame(tx, claimedGame.id);
+        timing.lockWaitMs = performance.now() - lockStarted;
+        if (!game || game.status !== 'active' || game.current_round !== claimedGame.current_round
+          || game.object_id !== claimedGame.object_id) return false;
+        // A stale claimant must never commit after another request takes over.
+        const claim = await tx.$queryRaw<Array<{ claim_token: string }>>`
+          SELECT claim_token FROM multiplayer_round_resolution_claims
+          WHERE session_id = ${claimedGame.id}::uuid AND round_number = ${claimedGame.current_round}
+          FOR UPDATE
+        `;
+        if (claim[0]?.claim_token !== token) return false;
+        return this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact, timing);
+      }, RESOLUTION_TRANSACTION_OPTIONS);
+      if (resolved) await this.refresh();
+      reportResolution(timing, resolveStarted, resolved, claimedGame);
+      return resolved || initialized;
+    } catch (error) {
+      if (!isTransactionTimeout(error)) throw error;
+      console.error('[multiplayer/resolve:transaction-timeout]', JSON.stringify({
+        roomId: claimedGame.room_id, sessionId: claimedGame.id, round: claimedGame.current_round,
+        durationMs: Math.round(performance.now() - resolveStarted),
+      }));
+      await this.refresh();
+      return false;
+    } finally {
+      try { await releaseClaim(claimedGame, token); }
+      catch (error) { console.error('[multiplayer/resolve:claim-release]', JSON.stringify({
+        roomId: claimedGame.room_id, sessionId: claimedGame.id, round: claimedGame.current_round, error: String(error),
+      })); }
+    }
   }
 
   private async resolveLocked(
