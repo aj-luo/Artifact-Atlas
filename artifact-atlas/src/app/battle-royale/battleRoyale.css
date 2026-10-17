@@ -287,7 +287,7 @@
 }
 
 .br-landing .br-title {
-  font-size: clamp(1.55rem, 7vw, 3rem);
+  font-size: clamp(1.35rem, 5vw, 2.25rem);
   text-align: center;
 }
 
@@ -296,7 +296,7 @@
   flex-direction: column;
   gap: 2rem;
   width: 100%;
-  max-width: 500px;
+  max-width: 620px;
   animation: fadeInUp 0.8s ease-out;
 }
 
@@ -341,6 +341,18 @@
   box-sizing: border-box;
 }
 
+.br-landing .br-create-settings {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.br-landing .br-create-settings + .br-btn {
+  flex: none;
+  margin-top: 0.75rem;
+}
+
 .br-landing .br-home-panels > .br-card[aria-hidden="true"] {
   visibility: hidden;
   opacity: 0;
@@ -379,7 +391,7 @@
 
 .br-container > .br-btn {
   align-self: center;
-  max-width: 500px;
+  max-width: 620px;
 }
 
 .br-input-group { display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem; }
@@ -572,7 +584,6 @@
 
 .br-active-game {
   width: 100%;
-  max-width: 1300px;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -648,21 +659,13 @@
   to   { transform: scale(1.08); }
 }
 
-/* 2-column layout on wide screens */
+/* Active round layout */
 .br-game-body {
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
 }
 
-@media (min-width: 900px) {
-  .br-game-body {
-    grid-template-columns: 1fr 380px;
-    align-items: start;
-  }
-}
-
-/* Artifact pane */
 .br-artifact-pane {
   position: relative;
   min-height: 360px;
@@ -983,6 +986,12 @@
   gap: 0.6rem;
 }
 
+.br-health-title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
 .br-health-bar {
   background: transparent;
   border: 0.5px solid rgba(255,255,255,0.3);
@@ -1005,7 +1014,19 @@
   display: flex;
   align-items: center;
   gap: 0.3rem;
+  min-width: 0;
 }
+
+.br-hb-player-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.br-hb-name .br-you-tag,
+.br-hb-name .br-guessed-tag { flex: none; }
 
 .br-hb-fill-bg {
   width: 100%;
@@ -1027,12 +1048,22 @@
 /* ── Finished screen ───────────────────────────────────────────────────────── */
 
 .br-finished {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.4fr);
+  align-items: start;
+  gap: clamp(0.75rem, 2vw, 1.5rem);
+  width: min(100%, 1400px);
+}
+
+.br-finished-summary {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 1.5rem;
-  animation: fadeInUp 0.6s ease-out;
+  align-items: stretch;
+  gap: 0.75rem;
+  min-width: 0;
 }
+
+.br-finished-summary:only-child { grid-column: 1 / -1; width: min(100%, 600px); justify-self: center; }
 
 .br-finished-title {
   font-size: 1rem;
@@ -1044,10 +1075,11 @@
 }
 
 .br-winner-name {
-  font-size: 2.8rem;
+  font-size: clamp(1.5rem, 3vw, 2.8rem);
   font-weight: 900;
   margin: 0;
   color: #fff;
+  overflow-wrap: anywhere;
 }
 
 .br-leaderboard {
@@ -1055,7 +1087,7 @@
   flex-direction: column;
   gap: 0.6rem;
   width: 100%;
-  max-width: 440px;
+  max-width: none;
 }
 
 .br-lb-row {
@@ -1076,18 +1108,33 @@
 }
 
 .br-lb-rank { font-size: 1.3rem; }
-.br-lb-name { font-weight: 600; }
+.br-lb-name { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }
 .br-lb-hp   { color: #aaa; font-size: 0.9rem; }
 
 .br-finished-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.75rem;
-  width: min(100%, 460px);
-  margin-top: 0.5rem;
+  width: 100%;
+  margin-top: 0;
 }
-.br-finished-actions .br-btn { flex: 1; }
-.br-finished-history { margin-top: -0.5rem; }
-.br-finished-result { width: min(100%, 820px); }
+.br-finished-actions .br-btn { flex: 1 1 140px; min-height: 44px; }
+.br-finished-history { align-self: flex-start; min-height: 40px; }
+.br-finished-result {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 0.5px solid rgba(255, 255, 255, 0.55);
+  border-radius: 10px;
+  padding: 1rem;
+}
+.br-finished-result .br-result-card { width: 100%; padding: 0; box-sizing: border-box; }
+.br-finished-result .br-reveal-answer,
+.br-finished-result .br-reveal-players { max-width: none; }
+.br-finished-result .br-reveal-player { grid-template-columns: minmax(0, 1fr) auto; gap: 0.35rem 0.75rem; }
+.br-finished-result .br-reveal-player-name { min-width: 0; overflow-wrap: anywhere; }
+.br-finished-result .br-reveal-player-guess { grid-column: 1; }
+.br-finished-result .br-reveal-player-dmg { grid-column: 2; }
 
 /* Persistent, read-only round history */
 .br-history-overlay {
@@ -1139,6 +1186,8 @@
   flex-direction: column;
   gap: 1rem;
 }
+
+.br-history-list > .br-history-round-card { flex: none; }
 
 .br-history-round-card {
   width: 100%;
@@ -1209,8 +1258,14 @@
 .br-landing .br-home-artwork img { max-height: 100%; }
 .br-landing .br-home-controls { flex: 1; min-height: 0; gap: 0.5rem; }
 .br-landing .br-action-toggle { flex: none; }
-.br-landing .br-home-panels { flex: 1; min-height: 0; overflow-y: auto; align-content: start; }
-.br-landing .br-home-panels > .br-card { padding: 1rem; }
+.br-landing .br-home-panels { flex: 1; min-height: 0; overflow: hidden; }
+.br-landing .br-home-panels > .br-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  padding: 1.5rem;
+}
 .br-landing .br-home-panels > .br-card[aria-hidden="true"] { display: none; }
 .br-landing .br-card p { margin-bottom: 0.75rem; }
 .br-landing .br-input-group { gap: 0.25rem; margin-bottom: 0.75rem; }
@@ -1245,44 +1300,87 @@
 .br-active-content,
 .br-game-body,
 .br-controls-pane { min-height: 0; }
-.br-active-game { flex: 1; overflow: hidden; }
-.br-active-content { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
+.br-page.br-active-page {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  padding-inline: clamp(0.5rem, 1vw, 1rem);
+}
+.br-page.br-finished-page {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
+  padding-inline: clamp(0.5rem, 1vw, 1rem);
+}
+.br-active-game { flex: none; overflow: visible; }
+.br-active-page > .br-room-history { margin: 0.5rem auto 0; }
+.br-finished-page > .br-room-history { margin: 0.5rem auto 0; }
+.br-active-content { flex: none; display: flex; flex-direction: column; gap: 0.75rem; }
 .br-top-bar { flex: none; padding: 0.5rem 0.75rem; }
 .br-top-bar .br-history-button { min-height: 40px; }
-.br-game-body { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
-.br-artifact-pane { flex: 1; min-height: 0; }
+.br-game-body { flex: none; display: flex; flex-direction: column; gap: 0.75rem; overflow: visible; }
+.br-game-body-playing {
+  display: grid;
+  grid-template-columns: clamp(145px, 16vw, 220px) minmax(0, 1fr) clamp(270px, 25vw, 360px);
+  grid-template-rows: auto;
+  align-items: start;
+}
+.br-artifact-pane {
+  width: 100%;
+  max-width: 75vw;
+  height: clamp(360px, 65dvh, 680px);
+  max-height: 75dvh;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  justify-self: center;
+}
 .br-artifact-container { min-height: 0; }
 .br-artifact-img { max-height: 100%; }
-.br-controls-pane { flex: 0 1 auto; max-height: 62%; overflow-y: auto; gap: 0.75rem; }
+.br-controls-pane { min-width: 0; height: auto; overflow: visible; gap: 0.75rem; }
 .br-guess-panel { flex: none; gap: 0.5rem; padding: 0.75rem; }
 .br-guess-panel .br-btn,
 .br-guess-panel .br-input,
 .br-flag-select > button { min-height: 44px; }
-.br-health-bars { flex: 1 1 auto; min-height: 60px; overflow-y: auto; gap: 0.4rem; }
+.br-guess-panel > div:last-of-type { box-sizing: border-box; }
+.br-health-bars { min-width: 0; min-height: 0; height: auto; overflow: visible; gap: 0.4rem; }
 .br-health-bar { padding: 0.5rem 0.75rem; }
 .br-round-results { flex: 1; min-height: 0; max-height: none; overflow-y: auto; padding: 0.75rem; }
 .br-result-card { min-height: 0; gap: 0.75rem; }
 .br-reveal-answer { box-sizing: border-box; padding: 0.75rem; }
 .br-reveal-artifact-image { max-height: min(220px, 25dvh); }
 
-@media (min-width: 900px) {
-  .br-game-body { display: grid; grid-template-columns: minmax(0, 1fr) 380px; align-items: stretch; }
-  .br-controls-pane { height: 100%; max-height: none; }
+@media (max-width: 900px) {
+  .br-game-body-playing {
+    grid-template-columns: minmax(155px, 1.1fr) minmax(280px, 2fr);
+    grid-template-rows: auto auto;
+    grid-template-areas: "image image" "health guess";
+    align-items: start;
+  }
+  .br-game-body-playing > .br-health-bars { grid-area: health; }
+  .br-game-body-playing > .br-artifact-pane { grid-area: image; width: 75%; max-width: none; height: clamp(300px, 50dvh, 520px); }
+  .br-game-body-playing > .br-controls-pane { grid-area: guess; }
 }
 
-.br-finished { flex: 1; min-height: 0; width: 100%; gap: 0.5rem; overflow: hidden; }
-.br-finished-title,
-.br-winner-name,
-.br-finished-history,
-.br-finished-actions { flex: none; }
-.br-winner-name { font-size: clamp(1.3rem, 4dvh, 2.8rem); text-align: center; }
-.br-finished-result { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
-.br-finished-result .br-result-card { padding: 0 0.5rem; box-sizing: border-box; }
-.br-leaderboard { flex: 0 1 auto; min-height: 44px; max-height: 24dvh; overflow-y: auto; gap: 0.4rem; }
+@media (max-width: 650px) {
+  .br-game-body-playing {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas: "image" "guess" "health";
+  }
+  .br-game-body-playing > .br-artifact-pane { height: clamp(240px, 42dvh, 420px); }
+  .br-game-body-playing > .br-health-bars,
+  .br-game-body-playing > .br-controls-pane { width: 75%; justify-self: center; }
+  .br-game-body-playing .br-year-row { flex-wrap: wrap; }
+}
+
+.br-leaderboard { gap: 0.4rem; }
 .br-lb-row { padding: 0.5rem 0.75rem; }
-.br-finished-actions { margin-top: 0; }
-.br-finished-actions .br-btn { min-height: 44px; }
-.br-finished-history { margin-top: 0; min-height: 40px; }
+
+@media (max-width: 850px) {
+  .br-finished { grid-template-columns: minmax(0, 1fr); }
+  .br-finished-summary:only-child { grid-column: 1; }
+}
 
 .br-room-history {
   flex: none;
@@ -1343,7 +1441,7 @@
   .br-page-with-help { padding-top: 0.75rem; }
   .br-help-trigger { width: 36px; height: 36px; top: 0.5rem; }
   .br-landing .br-header { margin-bottom: 0.25rem; }
-  .br-landing .br-title { font-size: clamp(1.2rem, 4dvh, 2rem); }
+  .br-landing .br-title { font-size: clamp(1.2rem, 4dvh, 1.7rem); }
   .br-landing .br-home-artwork { flex-basis: clamp(32px, 10dvh, 80px); }
   .br-lobby { gap: 0.5rem; }
   .br-qr svg { width: clamp(60px, 14dvh, 100px); }

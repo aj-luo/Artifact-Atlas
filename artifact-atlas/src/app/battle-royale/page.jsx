@@ -115,27 +115,29 @@ export default function BattleRoyaleLobby() {
                 <h2>Create a Game</h2>
                 <p>Host a new game and invite your friends.</p>
 
-                <div className="br-input-group">
-                  <label>Rounds: <span>{maxRounds}</span></label>
-                  <input type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
-                  <small>Number of artifacts to guess (5–20).</small>
-                </div>
+                <div className="br-create-settings">
+                  <div className="br-input-group">
+                    <label>Rounds: <span>{maxRounds}</span></label>
+                    <input type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
+                    <small>Number of artifacts to guess (5–20).</small>
+                  </div>
 
-                <div className="br-input-group">
-                  <label>Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
-                  <input type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
-                  <small>Each player's starting health (5,000–20,000).</small>
-                </div>
+                  <div className="br-input-group">
+                    <label>Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
+                    <input type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
+                    <small>Each player's starting health (5,000–20,000).</small>
+                  </div>
 
-                <div className="br-input-group">
-                  <label>Round duration: <span>{countdownSeconds}s</span></label>
-                  <input type="range" min="30" max="120" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
-                  <small>Everyone has this long to guess from the start of each round.</small>
-                </div>
+                  <div className="br-input-group">
+                    <label>Round duration: <span>{countdownSeconds}s</span></label>
+                    <input type="range" min="30" max="120" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
+                    <small>Everyone has this long to guess from the start of each round.</small>
+                  </div>
 
-                <div className="br-input-group">
-                  <AutoAdvanceSwitch checked={autoAdvanceRounds} onChange={setAutoAdvanceRounds} />
-                  <small>Turn off to let the host start each next round after reviewing results.</small>
+                  <div className="br-input-group">
+                    <AutoAdvanceSwitch checked={autoAdvanceRounds} onChange={setAutoAdvanceRounds} />
+                    <small>Turn off to let the host start each next round after reviewing results.</small>
+                  </div>
                 </div>
 
                 <button className="br-btn br-btn-primary" onClick={handleCreateGame} disabled={isCreating}>
