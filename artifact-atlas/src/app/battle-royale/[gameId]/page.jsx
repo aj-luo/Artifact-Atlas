@@ -56,8 +56,6 @@ export default function BattleRoyaleRoom() {
   const [startError, setStartError] = useState(null);
   const [statusError, setStatusError] = useState(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const activePageRef = useRef(null);
-  const artifactPaneRef = useRef(null);
   const debounceRef = useRef(null);
   const latestRevisionRef = useRef(-1);
   const serverClockOffsetRef = useRef(0);
@@ -65,50 +63,6 @@ export default function BattleRoyaleRoom() {
   const phase = getRoomPhase(gameState, Date.now() + serverClockOffsetRef.current);
   const { revealPending, timeRemaining } = phase;
   const intermission = { ...phase, phase: phase.phase === 'playing' ? 'none' : phase.phase };
-
-  useEffect(() => {
-    if (gameState?.status !== 'active' || phase.phase === 'syncing') return;
-
-    const page = activePageRef.current;
-    const artifact = artifactPaneRef.current;
-    if (!page || !artifact) return;
-
-    let frame;
-    const fitImage = () => {
-      const history = page.querySelector('.br-room-history');
-      const lastContent = history ?? page.querySelector('.br-active-game');
-      if (!lastContent) return;
-
-      const pageStyle = getComputedStyle(page);
-      const lastStyle = getComputedStyle(lastContent);
-      const contentHeight = lastContent.getBoundingClientRect().bottom - page.getBoundingClientRect().top
-        + parseFloat(lastStyle.marginBottom) + parseFloat(pageStyle.paddingBottom);
-      const currentHeight = artifact.getBoundingClientRect().height;
-      const viewportHeight = window.innerHeight;
-      const narrow = window.innerWidth <= 650;
-      const medium = window.innerWidth <= 900;
-      const minHeight = narrow ? 150 : medium ? 170 : 220;
-      const maxHeight = Math.min(medium ? 520 : 680, viewportHeight * (narrow ? 0.42 : medium ? 0.5 : 0.65));
-      const nextHeight = Math.max(minHeight, Math.min(maxHeight, currentHeight + viewportHeight - contentHeight - 2));
-      if (Math.abs(nextHeight - currentHeight) > 1) artifact.style.height = `${nextHeight}px`;
-    };
-    const scheduleFit = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(fitImage);
-    };
-    const observer = new ResizeObserver(scheduleFit);
-    [page.querySelector('.br-top-bar'), page.querySelector('.br-health-bars'),
-      page.querySelector('.br-controls-pane'), page.querySelector('.br-room-history')]
-      .filter(Boolean).forEach(element => observer.observe(element));
-    window.addEventListener('resize', scheduleFit);
-    scheduleFit();
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener('resize', scheduleFit);
-      artifact.style.height = '';
-    };
-  }, [gameState?.status, gameState?.currentRound, phase.phase, revealPending]);
 
   const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
@@ -521,7 +475,7 @@ export default function BattleRoyaleRoom() {
             })}
           </div>
 
-          <div className="br-artifact-pane" ref={artifactPaneRef}>
+          <div className="br-artifact-pane">
             {gameState.currentArtifact && (
               <div className="br-artifact-container">
                 <img src={gameState.currentArtifact.imageUrl} alt="Artifact" className="br-artifact-img" />
@@ -666,7 +620,7 @@ export default function BattleRoyaleRoom() {
   }
 
   return (
-    <div ref={activePageRef} className={`br-page br-page-with-help${gameState.status === 'active' ? ' br-active-page' : gameState.status === 'finished' ? ' br-finished-page' : ''}`}>
+    <div className={`br-page br-page-with-help${gameState.status === 'active' ? ' br-active-page' : gameState.status === 'finished' ? ' br-finished-page' : ''}`}>
       <BattleRoyaleHelp />
       {statusError && <p className="br-error" role="status">{statusError}</p>}
       {startError && <p className="br-error" role="alert">{startError}</p>}
