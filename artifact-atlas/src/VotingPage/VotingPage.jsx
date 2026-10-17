@@ -2,6 +2,66 @@ import styles from './VotingPage.module.css';
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
+function ArtifactImageViewer({ src, alt }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    useEffect(() => {
+        if (!isExpanded) return;
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') setIsExpanded(false);
+        };
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isExpanded]);
+
+    return (
+        <>
+            <div className={styles.imageWrapper}>
+                <button
+                    type="button"
+                    className={styles.imageButton}
+                    onClick={() => setIsExpanded(true)}
+                    aria-label={`View ${alt} full screen`}
+                >
+                    <img src={src} alt={alt} className={styles.artifactImage} />
+                </button>
+            </div>
+            {isExpanded && (
+                <div
+                    className={styles.imageLightbox}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`${alt} full screen`}
+                    onClick={() => setIsExpanded(false)}
+                >
+                    <button
+                        type="button"
+                        className={styles.closeLightbox}
+                        onClick={() => setIsExpanded(false)}
+                        aria-label="Close full screen image"
+                        autoFocus
+                    >
+                        ×
+                    </button>
+                    <img
+                        src={src}
+                        alt={alt}
+                        className={styles.expandedArtifactImage}
+                        onClick={(event) => event.stopPropagation()}
+                    />
+                </div>
+            )}
+        </>
+    );
+}
+
 function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, image, timeLeft, setIsCorrect }) {
     const [descriptions, setDescriptions] = useState({});
     const [loading, setLoading] = useState(true);
@@ -154,9 +214,7 @@ function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, imag
             {/* Artifact Reference Image */}
             {image && (
                 <div className={styles.artifactCard}>
-                    <div className={styles.imageWrapper}>
-                        <img src={image} alt="Artifact" className={styles.artifactImage} />
-                    </div>
+                    <ArtifactImageViewer src={image} alt="Artifact" />
                 </div>
             )}
 

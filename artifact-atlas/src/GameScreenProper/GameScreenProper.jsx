@@ -10,6 +10,66 @@ const formatTime = (seconds) => {
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
 };
 
+function ArtifactImageViewer({ src, alt }) {
+    const [isExpanded, setIsExpanded] = useState(false);
+
+    useEffect(() => {
+        if (!isExpanded) return;
+
+        const handleKeyDown = (event) => {
+            if (event.key === 'Escape') setIsExpanded(false);
+        };
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        window.addEventListener('keydown', handleKeyDown);
+
+        return () => {
+            document.body.style.overflow = previousOverflow;
+            window.removeEventListener('keydown', handleKeyDown);
+        };
+    }, [isExpanded]);
+
+    return (
+        <>
+            <div className={styles.imageWrapper}>
+                <button
+                    type="button"
+                    className={styles.imageButton}
+                    onClick={() => setIsExpanded(true)}
+                    aria-label={`View ${alt} full screen`}
+                >
+                    <img src={src} alt={alt} className={styles.artifactImage} />
+                </button>
+            </div>
+            {isExpanded && (
+                <div
+                    className={styles.imageLightbox}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-label={`${alt} full screen`}
+                    onClick={() => setIsExpanded(false)}
+                >
+                    <button
+                        type="button"
+                        className={styles.closeLightbox}
+                        onClick={() => setIsExpanded(false)}
+                        aria-label="Close full screen image"
+                        autoFocus
+                    >
+                        ×
+                    </button>
+                    <img
+                        src={src}
+                        alt={alt}
+                        className={styles.expandedArtifactImage}
+                        onClick={(event) => event.stopPropagation()}
+                    />
+                </div>
+            )}
+        </>
+    );
+}
+
 // 3 different sublayouts (Lobby / Briefing View)
 function ArcheologistLayout() {
     return (
@@ -99,9 +159,7 @@ function ArcheologistGameplay({ imageUrl, artifactName, artifactUrl, setCurrentV
         <div className={styles.gameplayContainer}>
             <div className={styles.artifactCard}>
                 {imageUrl && (
-                    <div className={styles.imageWrapper}>
-                        <img src={imageUrl} alt={artifactName || 'Artifact'} className={styles.artifactImage} />
-                    </div>
+                    <ArtifactImageViewer src={imageUrl} alt={artifactName || 'Artifact'} />
                 )}
                 {artifactName && <h3 className={styles.artifactTitle}>{artifactName}</h3>}
                 {artifactUrl && (
@@ -117,6 +175,7 @@ function ArcheologistGameplay({ imageUrl, artifactName, artifactUrl, setCurrentV
                         value={explanation}
                         maxLength={100}
                         onChange={handleTextChange}
+                        onPaste={(e) => e.preventDefault()}
                         placeholder="Provide your factual artifact description..."
                         rows={4}
                         className={styles.textarea}
@@ -191,9 +250,7 @@ function ImposterGameplay({ imageUrl, gameId, setCurrentView, timeLeft }) {
         <div className={styles.gameplayContainer}>
             <div className={styles.artifactCard}>
                 {imageUrl && (
-                    <div className={styles.imageWrapper}>
-                        <img src={imageUrl} alt="Artifact" className={styles.artifactImage} />
-                    </div>
+                    <ArtifactImageViewer src={imageUrl} alt="Artifact" />
                 )}
             </div>
 
@@ -203,6 +260,7 @@ function ImposterGameplay({ imageUrl, gameId, setCurrentView, timeLeft }) {
                         value={explanation}
                         maxLength={100}
                         onChange={handleTextChange}
+                        onPaste={(e) => e.preventDefault()}
                         placeholder="Bluff your description to convince everyone you are the real Archeologist..."
                         rows={4}
                         className={styles.textarea}

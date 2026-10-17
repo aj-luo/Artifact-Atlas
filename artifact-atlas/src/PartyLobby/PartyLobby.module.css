@@ -3,25 +3,25 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
-    padding: 24px;
+    min-height: 0;
+    padding: 12px;
     box-sizing: border-box;
 }
 
 /* Glassmorphism Card Container */
 .card {
     width: 100%;
-    max-width: 440px;
+    max-width: 540px;
     background: rgba(18, 18, 22, 0.65);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 20px;
-    padding: 36px 32px;
+    padding: 24px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 16px;
     animation: fadeIn 0.3s ease-out;
 }
 
@@ -52,15 +52,21 @@
 
 /* Form Layout */
 .form {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 20px;
 }
 
 .inputGroup {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+}
+
+.inputGroup:nth-child(3),
+.errorBadge,
+.buttonGroup {
+    grid-column: 1 / -1;
 }
 
 .label {
@@ -108,7 +114,7 @@
 .buttonGroup {
     display: flex;
     gap: 12px;
-    margin-top: 8px;
+    margin-top: 2px;
 }
 
 .backButton {
@@ -158,6 +164,12 @@
 .createButton:disabled, .backButton:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+@media (max-width: 520px) {
+    .card { padding: 20px 16px; }
+    .form { grid-template-columns: 1fr; }
+    .inputGroup:nth-child(3), .errorBadge, .buttonGroup { grid-column: auto; }
 }
 
 /* Spinner */

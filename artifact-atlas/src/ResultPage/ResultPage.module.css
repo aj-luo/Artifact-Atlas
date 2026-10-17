@@ -3,11 +3,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 28px;
+    gap: 14px;
     max-width: 600px;
     margin: 0 auto;
-    padding: 24px;
-    min-height: 100vh;
+    padding: 10px;
+    min-height: 0;
     box-sizing: border-box;
 }
 
@@ -15,7 +15,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 24px;
+    gap: 14px;
     width: 100%;
 }
 
@@ -24,12 +24,12 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 20px;
-    padding: 36px 28px;
+    padding: 22px 20px;
     text-align: center;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 16px;
+    gap: 10px;
     width: 100%;
     backdrop-filter: blur(12px);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
@@ -99,7 +99,7 @@
     background: rgba(0, 0, 0, 0.3);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
-    padding: 12px 24px;
+    padding: 9px 16px;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -126,9 +126,9 @@
 .revealCard {
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 12px;
     width: 100%;
-    padding: 22px 24px;
+    padding: 14px 18px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 16px;
     background: rgba(255, 255, 255, 0.04);
@@ -139,7 +139,7 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 8px;
+    gap: 6px;
     min-width: 0;
 }
 
@@ -173,14 +173,14 @@
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
-    padding: 20px 28px;
+    padding: 14px 18px;
     width: 100%;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
     box-sizing: border-box;
 }
 
 .newGameButton {
-    height: 50px;
+    height: 44px;
     width: 100%;
     border-radius: 10px;
     background: #ffffff;
