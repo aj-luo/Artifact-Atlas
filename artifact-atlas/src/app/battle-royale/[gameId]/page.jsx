@@ -426,7 +426,7 @@ export default function BattleRoyaleRoom() {
     const showResults = intermission.phase === 'results' && Boolean(gameState.lastRoundReveal);
 
     return (
-      <div className="br-active-game">
+      <div className={`br-active-game${showResults ? ' is-results' : ''}`}>
         <div className={`br-active-content ${intermission.phase === 'countdown' ? 'is-countdown-blurred' : ''} ${isIntermission ? 'is-intermission' : ''}`}>
         <div className="br-top-bar">
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
@@ -614,7 +614,7 @@ export default function BattleRoyaleRoom() {
             </button>
           </form>
         </div>
-        <RoomHistory roomId={gameId} revision={gameState.revision} />
+        <RoomHistory key={gameId} roomId={gameId} revision={gameState.revision} />
       </div>
     );
   }
@@ -632,7 +632,7 @@ export default function BattleRoyaleRoom() {
         ? <div className="br-waiting" role="status">Round complete — syncing results…</div>
         : renderFinished())}
       {gameState.status === 'waiting' && isMember && <button className="br-btn br-btn-leave" disabled={isStarting} onClick={() => roomAction('leave')}>Leave Room</button>}
-      {!revealPending && <RoomHistory roomId={gameId} revision={gameState.revision} />}
+      {!revealPending && <RoomHistory key={gameId} roomId={gameId} revision={gameState.revision} />}
       {isHistoryOpen && !revealPending && (
         <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
           <div className="br-history-panel">

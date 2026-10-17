@@ -1273,6 +1273,10 @@
 
 .br-active-game, .br-finished { width: min(100%, 1400px); min-width: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .br-active-content { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.br-active-game.is-results { overflow: hidden; }
+.br-active-game.is-results .br-active-content { flex: 1 1 auto; min-height: 0; }
+.br-active-game.is-results .br-top-bar { flex: none; }
+.br-active-game.is-results .br-game-body { flex: 1 1 auto; min-height: 0; }
 .br-top-bar { gap: 0.65rem; flex-wrap: wrap; }
 .br-top-bar-actions { margin-left: auto; }
 .br-top-bar .br-history-button { min-height: 44px; }
@@ -1283,7 +1287,7 @@
   gap: 0.75rem;
 }
 .br-health-bars, .br-controls-pane { min-width: 0; }
-.br-health-bars, .br-controls-pane { max-height: min(560px, 55dvh); overflow-y: auto; }
+.br-health-bars, .br-controls-pane { overflow: visible; }
 .br-health-bar { padding: 0.6rem 0.75rem; }
 .br-hb-player-name { overflow-wrap: anywhere; white-space: normal; text-overflow: clip; }
 .br-artifact-pane {
@@ -1300,12 +1304,18 @@
 .br-flag-select [role="listbox"] { max-height: min(300px, 50dvh); }
 .br-round-results {
   min-height: 0;
-  max-height: calc(100dvh - 12rem);
+  max-height: none;
   overflow-y: auto;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   padding: clamp(0.75rem, 2vw, 1.5rem);
 }
-.br-result-card { width: min(100%, 820px); min-width: 0; gap: 0.75rem; }
+.br-result-card { width: min(100%, 820px); min-width: 0; gap: 0.75rem; container-type: inline-size; }
+.br-round-results .br-result-card { width: min(100%, 1100px); flex: none; }
+.br-result-content { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.75rem; width: 100%; min-width: 0; }
+.br-result-details { display: flex; flex-direction: column; gap: 0.75rem; min-width: 0; }
+.br-result-details .br-reveal-answer,
+.br-result-details .br-reveal-players { width: 100%; max-width: none; box-sizing: border-box; }
 .br-reveal-answer { box-sizing: border-box; min-width: 0; }
 .br-reveal-artifact-image { max-height: 240px; }
 .br-reveal-artifact-name, .br-reveal-value { overflow-wrap: anywhere; }
@@ -1356,7 +1366,7 @@
 .br-history-round-card { min-width: 0; }
 
 .br-room-overlay { animation: br-room-fade 180ms ease-out both; }
-.br-room-panel { animation: br-room-rise 220ms cubic-bezier(.2,.8,.2,1) both; }
+.br-room-panel { color: #fff; animation: br-room-rise 220ms cubic-bezier(.2,.8,.2,1) both; }
 .br-room-popup-tabs {
   display: flex;
   gap: 0.5rem;
@@ -1416,10 +1426,15 @@
 .br-session-detail > h1, .br-session-detail > h2, .br-session-detail > p { margin: 1rem 0; overflow-wrap: anywhere; }
 .br-session-detail > h1 { font-size: clamp(1.5rem, 4vw, 2.25rem); }
 .br-session-detail > h2 { font-size: clamp(1.2rem, 3vw, 1.6rem); }
-.br-session-detail > .br-room-table-wrap { max-height: min(40dvh, 420px); overflow: auto; }
+.br-session-detail > .br-room-table-wrap { overflow-x: auto; }
 .br-session-rounds { display: grid; gap: 1rem; }
 .br-session-rounds .br-result-card { margin: 0; }
 .br-session-detail .br-result-card { width: 100%; }
+
+@container (min-width: 700px) {
+  .br-result-content.has-image { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(1rem, 2vw, 1.5rem); }
+  .br-result-content.has-image .br-reveal-artifact-image { max-height: 360px; align-self: start; }
+}
 
 @media (max-width: 900px) {
   .br-game-body-playing {
@@ -1448,7 +1463,6 @@
   .br-game-body-playing { grid-template-columns: minmax(0, 1fr); grid-template-areas: "image" "guess" "health"; }
   .br-game-body-playing > .br-artifact-pane { width: 100%; height: clamp(220px, 36dvh, 380px); }
   .br-game-body-playing > .br-health-bars, .br-game-body-playing > .br-controls-pane { width: 100%; }
-  .br-game-body-playing > .br-health-bars, .br-game-body-playing > .br-controls-pane { max-height: none; overflow: visible; }
   .br-top-bar { padding: 0.6rem; }
   .br-timer { font-size: 1.25rem; min-width: 3rem; }
   .br-round-results { padding: 0.65rem; }
