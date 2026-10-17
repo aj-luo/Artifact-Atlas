@@ -3,11 +3,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 28px;
-    max-width: 480px;
+    gap: 16px;
+    max-width: 420px;
     margin: 0 auto;
-    padding: 24px;
-    min-height: 100vh;
+    padding: 12px;
+    min-height: 0;
     box-sizing: border-box;
 }
 
@@ -16,7 +16,7 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 6px;
     text-align: center;
     width: 100%;
 }
@@ -54,11 +54,11 @@
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 20px;
-    padding: 32px 28px;
+    padding: 22px 24px;
     width: 100%;
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 14px;
     backdrop-filter: blur(12px);
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
     box-sizing: border-box;
@@ -68,7 +68,7 @@
 .inputGroup {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 5px;
     text-align: left;
     width: 100%;
 }
@@ -83,7 +83,7 @@
 }
 
 .lobbyInput {
-    height: 52px;
+    height: 46px;
     padding: 0 18px;
     border-radius: 12px;
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -117,8 +117,8 @@
 .actionArea {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-top: 8px;
+    gap: 8px;
+    margin-top: 2px;
 }
 
 .joinButton {

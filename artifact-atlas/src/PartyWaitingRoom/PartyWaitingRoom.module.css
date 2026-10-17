@@ -3,26 +3,33 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    min-height: 100vh;
-    padding: 24px;
+    min-height: 0;
+    padding: 10px;
     box-sizing: border-box;
 }
 
 /* Glassmorphism Card Container */
 .card {
     width: 100%;
-    max-width: 480px;
+    max-width: 760px;
     background: rgba(18, 18, 22, 0.65);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 20px;
-    padding: 32px;
+    padding: 22px;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
     animation: fadeIn 0.3s ease-out;
+}
+
+.header,
+.codeContainer,
+.errorMessage,
+.buttonGroup {
+    grid-column: 1 / -1;
 }
 
 @keyframes fadeIn {
@@ -68,7 +75,7 @@
     background: rgba(0, 0, 0, 0.35);
     border: 1px dashed rgba(255, 255, 255, 0.25);
     border-radius: 14px;
-    padding: 14px 18px;
+    padding: 10px 14px;
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -112,20 +119,31 @@
 }
 
 .qrSection {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    grid-template-areas:
+        "label label"
+        "qr hint"
+        "qr link"
+        "qr copy";
     align-items: center;
-    gap: 10px;
-    padding: 16px;
+    gap: 7px;
+    padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 14px;
     background: rgba(255, 255, 255, 0.04);
     text-align: center;
 }
 
+.qrSection > .sectionLabel { grid-area: label; }
+.qrCode { grid-area: qr; }
+.qrHint { grid-area: hint; }
+.joinLink { grid-area: link; }
+.copyLinkButton { grid-area: copy; justify-self: start; }
+
 .qrCode {
     display: flex;
-    padding: 10px;
+    padding: 6px;
     border-radius: 10px;
     background: #ffffff;
 }
@@ -166,7 +184,7 @@
 .playerSection {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
 }
 
 .playerHeader {
@@ -192,7 +210,7 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-    max-height: 240px;
+    max-height: 190px;
     overflow-y: auto;
     padding-right: 4px;
 }
@@ -312,4 +330,20 @@
 .startButton:disabled {
     opacity: 0.4;
     cursor: not-allowed;
+}
+
+@media (max-width: 620px) {
+    .card {
+        grid-template-columns: 1fr;
+        padding: 18px 16px;
+    }
+
+    .header,
+    .codeContainer,
+    .errorMessage,
+    .buttonGroup {
+        grid-column: auto;
+    }
+
+    .playerGrid { max-height: 150px; }
 }

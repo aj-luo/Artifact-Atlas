@@ -2,9 +2,9 @@ import React from 'react';
 
 export default function RangeToggle({ value, onChange }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '240px' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
       <label style={{ fontWeight: '600' }}>
-        Players: <span style={{ color: '#2563eb' }}>{value}</span>
+        Players: <span style={{ color: '#ffffff' }}>{value}</span>
       </label>
       <input
         type="range"
@@ -12,9 +12,9 @@ export default function RangeToggle({ value, onChange }) {
         max="10"
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
-        style={{ cursor: 'pointer' }}
+        style={{ cursor: 'pointer', accentColor: '#ffffff' }}
       />
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#64748b' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'rgba(255, 255, 255, 0.45)' }}>
         <span>3</span>
         <span>10</span>
       </div>

@@ -103,12 +103,10 @@ function PartyLobby({ setCurrentView, setGameId, setIsHost }) {
 
                 <form className={styles.form} onSubmit={handleStart}>
                     <div className={styles.inputGroup}>
-                        <label className={styles.label}>Players</label>
                         <RangeToggle value={playerCount} onChange={setPlayerCount} />
                     </div>
 
                     <div className={styles.inputGroup}>
-                        <label className={styles.label}>Time Limit</label>
                         <TimeToggle value={timeLimit} onChange={setTimeLimit} />
                     </div>
 

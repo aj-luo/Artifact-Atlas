@@ -248,7 +248,7 @@ function PartyWaitingRoom({ setCurrentView, gameId, isHost, setIsHost, setTotalP
                     <span className={styles.sectionLabel}>SCAN TO JOIN</span>
                     {joinUrl && (
                         <div className={styles.qrCode}>
-                            <QRCodeSVG value={joinUrl} size={176} level="M" includeMargin />
+                            <QRCodeSVG value={joinUrl} size={100} level="M" includeMargin />
                         </div>
                     )}
                     <p className={styles.qrHint}>Scan to open the join page with this lobby code filled in.</p>
