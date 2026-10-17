@@ -74,7 +74,7 @@ export default function BattleRoyaleLobby() {
   };
 
   return (
-    <div className="br-page br-page-with-help">
+    <div className="br-page br-page-with-help br-landing">
       <BattleRoyaleHelp />
       <div className="br-header">
         <img src={logo.src} className="br-logo" alt="Artifact Atlas" />
@@ -110,8 +110,8 @@ export default function BattleRoyaleLobby() {
               </button>
             </div>
 
-            {lobbyAction === 'create' ? (
-              <div className="br-card">
+            <div className="br-home-panels">
+              <div className="br-card" aria-hidden={lobbyAction !== 'create'} inert={lobbyAction !== 'create'}>
                 <h2>Create a Game</h2>
                 <p>Host a new game and invite your friends.</p>
 
@@ -142,8 +142,7 @@ export default function BattleRoyaleLobby() {
                   {isCreating ? 'CREATING...' : 'CREATE NEW GAME'}
                 </button>
               </div>
-            ) : (
-              <div className="br-card">
+              <div className="br-card" aria-hidden={lobbyAction !== 'join'} inert={lobbyAction !== 'join'}>
                 <h2>Join a Game</h2>
                 <p>Have a game code? Enter it below to join.</p>
 
@@ -160,7 +159,7 @@ export default function BattleRoyaleLobby() {
                   </button>
                 </form>
               </div>
-            )}
+            </div>
           </div>
         </div>
 
