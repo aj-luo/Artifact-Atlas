@@ -40,10 +40,12 @@ export default function Home() {
   //tracks image
   const [image, setImage] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
+  const [roundDuration, setRoundDuration] = useState(null);
   const [gameTimerActive, setGameTimerActive] = useState(false);
 
   //tracks if guess is correct from guesser
   const [isCorrect, setIsCorrect] = useState(false);
+  const [guessTimedOut, setGuessTimedOut] = useState(false);
 
   useEffect(() => {
     const joinCode = new URLSearchParams(window.location.search).get('join');
@@ -90,11 +92,11 @@ export default function Home() {
       case 'gameintro':
         return <GameScreenIntro setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} setMyRole={setMyRole} />;
       case 'gamePlay':
-        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole} setImage={setImage} timeLeft={timeLeft} setTimeLeft={setTimeLeft} setGameTimerActive={setGameTimerActive}/>
+        return <GameScreenProper setCurrentView={setCurrentView} gameId={gameId} isHost={isHost} players={players} myRole={myRole} setImage={setImage} timeLeft={timeLeft} setTimeLeft={setTimeLeft} setRoundDuration={setRoundDuration} setGuessTimedOut={setGuessTimedOut} setGameTimerActive={setGameTimerActive}/>
       case 'votingpage':
-        return <VotingPage image={image} gameId={gameId} myRole={myRole} players={players} timeLeft={timeLeft} setIsCorrect={setIsCorrect} setCurrentView={setCurrentView}/>
+        return <VotingPage image={image} gameId={gameId} myRole={myRole} players={players} roundDuration={roundDuration} setIsCorrect={setIsCorrect} setGuessTimedOut={setGuessTimedOut} setCurrentView={setCurrentView}/>
       case 'resultpage':
-        return <ResultPage isCorrect={isCorrect} isHost={isHost} gameId={gameId} setCurrentView={setCurrentView}/>
+        return <ResultPage isCorrect={isCorrect} guessTimedOut={guessTimedOut} isHost={isHost} gameId={gameId} setCurrentView={setCurrentView}/>
       default:
         return <Homepage onStart={handleStart} isLoading={isLoading} />;
     }

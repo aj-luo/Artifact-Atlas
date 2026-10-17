@@ -46,6 +46,18 @@
     font-variant-numeric: tabular-nums;
 }
 
+.decisionPrompt {
+    margin: -8px 0 0;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 0.85rem;
+    text-align: center;
+}
+
+.decisionPrompt strong {
+    color: #ffffff;
+    font-variant-numeric: tabular-nums;
+}
+
 @keyframes timerPulse {
     from { opacity: 1; }
     to { opacity: 0.72; }
@@ -351,6 +363,19 @@
     background-color: #22c55e;
     border-radius: 50%;
     animation: pulse 1.8s infinite ease-in-out;
+}
+
+.deliberatingMessage {
+    animation: deliberatingPulse 1.8s ease-in-out infinite;
+}
+
+@keyframes deliberatingPulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .deliberatingMessage { animation: none; }
 }
 
 .spinner {

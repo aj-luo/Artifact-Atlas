@@ -2,7 +2,7 @@ import styles from './ResultPage.module.css';
 import { supabase } from '../lib/supabaseClient';
 import { useEffect, useState, useRef } from 'react';
 
-function ResultPage({ isCorrect, isHost, gameId, setCurrentView }) {
+function ResultPage({ isCorrect, guessTimedOut, isHost, gameId, setCurrentView }) {
 
     const channelRef = useRef(null);
     const [starting, setStarting] = useState(false);
@@ -125,7 +125,9 @@ function ResultPage({ isCorrect, isHost, gameId, setCurrentView }) {
                             <h2 className={styles.resultTitle}>Wrong Guess! 🎭</h2>
                             
                             <p className={styles.resultDescription}>
-                                The Imposters successfully deceived the Guesser!
+                                {guessTimedOut
+                                    ? 'The Guesser failed to submit a decision before time ran out.'
+                                    : 'The Imposters successfully deceived the Guesser!'}
                             </p>
 
                             <div className={styles.archeologistBox}>
