@@ -31,11 +31,13 @@ export default function HistoricalSession() {
       {!session.placementsAvailable && <p>This legacy session has incomplete survival history. Unavailable placements are excluded from placement statistics.</p>}
       <div className="br-room-table-wrap"><table className="br-room-table"><caption>Session standings</caption>
         <thead><tr><th>Place</th><th>Player</th><th>HP</th><th>Total score</th><th>Eliminated in round</th></tr></thead>
-        <tbody>{session.standings.map(p => <tr key={p.id}><td>{p.finalPlacement ?? 'Unavailable'}</td><td>{p.name}</td><td>{p.health.toLocaleString()}</td><td>{p.cumulativeScore.toLocaleString()}</td><td>{p.eliminationRound ?? (p.isEliminated ? 'Unavailable' : 'Survived')}</td></tr>)}</tbody>
+        <tbody>{session.standings.map(p => <tr key={p.id}><td data-label="Place">{p.finalPlacement ?? 'Unavailable'}</td><td data-label="Player">{p.name}</td><td data-label="HP">{p.health.toLocaleString()}</td><td data-label="Total score">{p.cumulativeScore.toLocaleString()}</td><td data-label="Eliminated in round">{p.eliminationRound ?? (p.isEliminated ? 'Unavailable' : 'Survived')}</td></tr>)}</tbody>
       </table></div>
       <h2>Round Results</h2>
       {session.roundHistory.length < session.currentRound && <p>Some round breakdowns are unavailable for this legacy session.</p>}
-      {session.roundHistory.map(round => <RoundResultCard key={round.round} round={round} playerId={playerId} history />)}
+      <div className="br-session-rounds">
+        {session.roundHistory.map(round => <RoundResultCard key={round.round} round={round} playerId={playerId} history />)}
+      </div>
     </>}
   </div></main>;
 }
