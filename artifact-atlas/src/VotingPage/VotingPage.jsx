@@ -1,5 +1,5 @@
 import styles from './VotingPage.module.css';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 
 function ArtifactImageViewer({ src, alt }) {
@@ -62,10 +62,15 @@ function ArtifactImageViewer({ src, alt }) {
     );
 }
 
-function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, image, timeLeft, setIsCorrect }) {
+function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, image, roundDuration, setIsCorrect, setGuessTimedOut }) {
     const [descriptions, setDescriptions] = useState({});
     const [loading, setLoading] = useState(true);
     const [selectedPlayerId, setSelectedPlayerId] = useState(null);
+    const [decisionTimeLeft, setDecisionTimeLeft] = useState(null);
+    const channelRef = useRef(null);
+    const decisionDeadlineRef = useRef(null);
+    const guessSubmittedRef = useRef(false);
+    const timeoutHandledRef = useRef(false);
     const formatTime = (seconds) => {
         if (seconds == null) return '--:--';
         const minutes = Math.floor(seconds / 60);
@@ -133,20 +138,66 @@ function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, imag
                 (payload) => {
                     if (payload.payload) {
                         setIsCorrect(payload.payload.isCorrect);
+                        setGuessTimedOut(Boolean(payload.payload.timedOut));
                         setCurrentView('resultpage');
                     }
                 }
             )
             .subscribe();
+        channelRef.current = channel;
 
         return () => {
             isSubscribed = false;
+            channelRef.current = null;
             supabase.removeChannel(channel);
         };
-    }, [gameId, setCurrentView, setIsCorrect]);
+    }, [gameId, setCurrentView, setIsCorrect, setGuessTimedOut]);
+
+    const descriptionEntries = Object.entries(descriptions);
+    const isGuesser = myRole?.toLowerCase() === 'guesser';
+    const allSubmissionsReceived = players.length > 0 && descriptionEntries.length >= players.length - 1;
+
+    const handleGuessTimeout = useCallback(async () => {
+        if (timeoutHandledRef.current || guessSubmittedRef.current) return;
+        timeoutHandledRef.current = true;
+        setIsCorrect(false);
+        setGuessTimedOut(true);
+
+        try {
+            await channelRef.current?.send({
+                type: 'broadcast',
+                event: 'guess_submitted',
+                payload: { isCorrect: false, timedOut: true },
+            });
+        } finally {
+            setCurrentView('resultpage');
+        }
+    }, [setCurrentView, setGuessTimedOut, setIsCorrect]);
+
+    useEffect(() => {
+        if (!allSubmissionsReceived || roundDuration == null) return;
+
+        if (decisionDeadlineRef.current == null) {
+            decisionDeadlineRef.current = Date.now() + roundDuration * 1000;
+        }
+        const deadline = decisionDeadlineRef.current;
+        const updateRemaining = () => {
+            setDecisionTimeLeft(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+        };
+        updateRemaining();
+        const timer = setInterval(updateRemaining, 250);
+        return () => clearInterval(timer);
+    }, [allSubmissionsReceived, roundDuration]);
+
+    useEffect(() => {
+        if (isGuesser && allSubmissionsReceived && decisionTimeLeft === 0) {
+            void handleGuessTimeout();
+        }
+    }, [isGuesser, allSubmissionsReceived, decisionTimeLeft, handleGuessTimeout]);
 
     const handleGuessArcheologist = async () => {
-        if (!selectedPlayerId) return;
+        if (!selectedPlayerId || decisionTimeLeft === 0 || timeoutHandledRef.current) return;
+        guessSubmittedRef.current = true;
 
         try {
             const response = await fetch(`/api/party/${gameId}/guess`, {
@@ -162,37 +213,41 @@ function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, imag
             const data = await response.json();
             const isCorrect = data.isArcheologist;
 
+            timeoutHandledRef.current = true;
             setIsCorrect(isCorrect);
+            setGuessTimedOut(false);
 
-            const channel = supabase.channel(`party_games_changes_${gameId}`);
-            await channel.send({
+            await channelRef.current?.send({
                 type: 'broadcast',
                 event: 'guess_submitted',
-                payload: { isCorrect },
+                payload: { isCorrect, timedOut: false },
             });
 
             setCurrentView('resultpage');
 
         } catch (error) {
             console.error('Error in handleGuessArcheologist:', error);
+            guessSubmittedRef.current = false;
+            if (decisionTimeLeft === 0) void handleGuessTimeout();
         }
     };
 
-    const descriptionEntries = Object.entries(descriptions);
-    const isGuesser = myRole?.toLowerCase() === 'guesser';
-    const allSubmissionsReceived = players.length > 0 && descriptionEntries.length >= players.length - 1;
-
     return (
         <div className={styles.home}>
-            {isGuesser && !allSubmissionsReceived && (
+            {allSubmissionsReceived && (
                 <div
-                    className={`${styles.timerBanner} ${timeLeft !== null && timeLeft <= 15 ? styles.lowTime : ''}`}
+                    className={`${styles.timerBanner} ${decisionTimeLeft !== null && decisionTimeLeft <= 15 ? styles.lowTime : ''}`}
                     role="timer"
-                    aria-label={`Time remaining ${formatTime(timeLeft)}`}
+                    aria-label={`Guesser decision time remaining ${formatTime(decisionTimeLeft)}`}
                 >
-                    <span className={styles.timerLabel}>Time Remaining</span>
-                    <span className={styles.timerValue}>{formatTime(timeLeft)}</span>
+                    <span className={styles.timerLabel}>Guesser Decision Time</span>
+                    <span className={styles.timerValue}>{formatTime(decisionTimeLeft)}</span>
                 </div>
+            )}
+            {isGuesser && allSubmissionsReceived && decisionTimeLeft !== null && (
+                <p className={styles.decisionPrompt}>
+                    You have <strong>{formatTime(decisionTimeLeft)}</strong> to make your decision.
+                </p>
             )}
 
             {/* Header / Briefing Section */}
@@ -266,7 +321,7 @@ function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, imag
                         <div className={styles.actionCard}>
                             <button
                                 className={styles.guessButton}
-                                disabled={!selectedPlayerId}
+                                disabled={!selectedPlayerId || decisionTimeLeft === 0}
                                 onClick={handleGuessArcheologist}
                             >
                                 SUBMIT GUESS
@@ -278,7 +333,9 @@ function VotingPage({ setCurrentView, gameId, isHost, players = [], myRole, imag
                     <div className={styles.spectatorSection}>
                         <div className={styles.waitingState}>
                             <span className={styles.pulseDot}></span>
-                            <p>Waiting for the Guesser to make their decision...</p>
+                            <p className={allSubmissionsReceived ? styles.deliberatingMessage : ''}>
+                                {allSubmissionsReceived ? 'Guesser is deliberating' : 'Waiting for all player descriptions...'}
+                            </p>
                         </div>
 
                         <div className={styles.descriptionList}>

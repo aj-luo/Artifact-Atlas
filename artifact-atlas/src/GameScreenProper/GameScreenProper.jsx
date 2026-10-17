@@ -277,7 +277,7 @@ function ImposterGameplay({ imageUrl, gameId, setCurrentView, timeLeft }) {
     );
 }
 
-function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, setImage, timeLeft, setTimeLeft, setGameTimerActive }) {
+function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, setImage, timeLeft, setTimeLeft, setRoundDuration, setGuessTimedOut, setGameTimerActive }) {
 
     const [started, setStarted] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(true);
@@ -317,7 +317,10 @@ function GameScreenProper({ setCurrentView, gameId, isHost, players, myRole, set
                         setArtifactUrl(data.artifact_url || '');
                         
                         if (data.countdown_minutes != null) {
-                            setTimeLeft(data.countdown_minutes * 60);
+                            const durationSeconds = data.countdown_minutes * 60;
+                            setTimeLeft(durationSeconds);
+                            setRoundDuration(durationSeconds);
+                            setGuessTimedOut(false);
                             setGameTimerActive(false);
                         }
                         setIsLoadingData(false);
