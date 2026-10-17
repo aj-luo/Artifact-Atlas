@@ -35,7 +35,9 @@ export default function HistoricalSession() {
       </table></div>
       <h2>Round Results</h2>
       {session.roundHistory.length < session.currentRound && <p>Some round breakdowns are unavailable for this legacy session.</p>}
-      {session.roundHistory.map(round => <RoundResultCard key={round.round} round={round} playerId={playerId} history />)}
+      <div className="br-session-rounds">
+        {session.roundHistory.map(round => <RoundResultCard key={round.round} round={round} playerId={playerId} history />)}
+      </div>
     </>}
   </div></main>;
 }

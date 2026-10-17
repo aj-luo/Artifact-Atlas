@@ -1,16 +1,20 @@
 /* ── Base ──────────────────────────────────────────────────────────────────── */
 
 .br-page {
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
   background: #242424;
   color: #fff;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem;
+  padding: 1rem;
 }
 
-.br-page-with-help { padding-top: 5rem; }
+.br-page-with-help { padding-top: 4rem; }
 
 .br-help-trigger {
   position: fixed;
@@ -1173,3 +1177,175 @@
 .br-session-link { display: grid; gap: .4rem; padding: 1rem; color: inherit; text-decoration: none; border: 1px solid #8885; border-radius: .5rem; }
 .br-session-link:hover { border-color: currentColor; }
 .br-session-detail .br-result-card { margin: 1.5rem 0; }
+
+/* Keep each screen inside the visible viewport. Lists and history own their overflow. */
+.br-page > .br-error,
+.br-page > .br-btn-leave { flex: none; }
+.br-page > .br-waiting { margin: auto; }
+.br-page .br-btn-leave { margin: 0.5rem auto 0; }
+.br-page .br-join-card {
+  margin: auto 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.br-landing .br-header {
+  flex: none;
+  margin-bottom: 0.75rem;
+}
+.br-landing .br-logo { height: clamp(28px, 6dvh, 50px); margin-bottom: 0.25rem; }
+.br-landing .br-container {
+  flex: 1;
+  min-height: 0;
+  gap: 0.75rem;
+}
+.br-landing .br-home-layout {
+  flex: 1;
+  min-height: 0;
+  gap: 0.75rem;
+}
+.br-landing .br-home-artwork { flex: 0 1 clamp(42px, 17dvh, 160px); min-height: 0; }
+.br-landing .br-home-artwork img { max-height: 100%; }
+.br-landing .br-home-controls { flex: 1; min-height: 0; gap: 0.5rem; }
+.br-landing .br-action-toggle { flex: none; }
+.br-landing .br-home-panels { flex: 1; min-height: 0; overflow-y: auto; align-content: start; }
+.br-landing .br-home-panels > .br-card { padding: 1rem; }
+.br-landing .br-home-panels > .br-card[aria-hidden="true"] { display: none; }
+.br-landing .br-card p { margin-bottom: 0.75rem; }
+.br-landing .br-input-group { gap: 0.25rem; margin-bottom: 0.75rem; }
+.br-landing .br-container > .br-btn { flex: none; margin-bottom: 1.25rem; }
+
+.br-lobby {
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+.br-lobby-share { flex: none; gap: 1rem; }
+.br-qr { padding: 0.5rem; }
+.br-qr svg { width: clamp(72px, 16dvh, 140px); height: auto; display: block; }
+.br-lobby-codes { gap: 0.4rem; }
+.br-lobby .br-input,
+.br-lobby .br-btn,
+.br-lobby .br-game-code { min-height: 44px; }
+.br-players-list {
+  flex: 1 1 auto;
+  min-height: 74px;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 0.75rem;
+}
+.br-lobby > .br-input-group { flex: none; width: 100%; margin-bottom: 0; }
+.br-lobby > .br-waiting-msg { flex: none; }
+
+.br-active-game,
+.br-active-content,
+.br-game-body,
+.br-controls-pane { min-height: 0; }
+.br-active-game { flex: 1; overflow: hidden; }
+.br-active-content { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
+.br-top-bar { flex: none; padding: 0.5rem 0.75rem; }
+.br-top-bar .br-history-button { min-height: 40px; }
+.br-game-body { flex: 1; display: flex; flex-direction: column; gap: 0.75rem; }
+.br-artifact-pane { flex: 1; min-height: 0; }
+.br-artifact-container { min-height: 0; }
+.br-artifact-img { max-height: 100%; }
+.br-controls-pane { flex: 0 1 auto; max-height: 62%; overflow-y: auto; gap: 0.75rem; }
+.br-guess-panel { flex: none; gap: 0.5rem; padding: 0.75rem; }
+.br-guess-panel .br-btn,
+.br-guess-panel .br-input,
+.br-flag-select > button { min-height: 44px; }
+.br-health-bars { flex: 1 1 auto; min-height: 60px; overflow-y: auto; gap: 0.4rem; }
+.br-health-bar { padding: 0.5rem 0.75rem; }
+.br-round-results { flex: 1; min-height: 0; max-height: none; overflow-y: auto; padding: 0.75rem; }
+.br-result-card { min-height: 0; gap: 0.75rem; }
+.br-reveal-answer { box-sizing: border-box; padding: 0.75rem; }
+.br-reveal-artifact-image { max-height: min(220px, 25dvh); }
+
+@media (min-width: 900px) {
+  .br-game-body { display: grid; grid-template-columns: minmax(0, 1fr) 380px; align-items: stretch; }
+  .br-controls-pane { height: 100%; max-height: none; }
+}
+
+.br-finished { flex: 1; min-height: 0; width: 100%; gap: 0.5rem; overflow: hidden; }
+.br-finished-title,
+.br-winner-name,
+.br-finished-history,
+.br-finished-actions { flex: none; }
+.br-winner-name { font-size: clamp(1.3rem, 4dvh, 2.8rem); text-align: center; }
+.br-finished-result { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.br-finished-result .br-result-card { padding: 0 0.5rem; box-sizing: border-box; }
+.br-leaderboard { flex: 0 1 auto; min-height: 44px; max-height: 24dvh; overflow-y: auto; gap: 0.4rem; }
+.br-lb-row { padding: 0.5rem 0.75rem; }
+.br-finished-actions { margin-top: 0; }
+.br-finished-actions .br-btn { min-height: 44px; }
+.br-finished-history { margin-top: 0; min-height: 40px; }
+
+.br-room-history {
+  flex: none;
+  width: min(100%, 1000px);
+  min-height: 0;
+  max-height: 30dvh;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+.br-room-history .br-room-tabs { flex: none; margin: 0.5rem 0; }
+.br-room-history .br-history-button { min-height: 40px; }
+.br-room-history .br-room-table-wrap,
+.br-room-history .br-room-sessions { min-height: 0; overflow: auto; }
+.br-room-history .br-room-sessions { display: block; }
+.br-room-history .br-room-sessions > * { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+
+.br-history-overlay { box-sizing: border-box; }
+.br-history-panel { max-height: 100%; min-height: 0; box-sizing: border-box; }
+.br-history-list { min-height: 0; }
+.br-history-header { flex: none; }
+
+.br-session-detail {
+  flex: 1;
+  min-height: 0;
+  width: min(100%, 1000px);
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+.br-session-detail > .br-history-button { flex: none; align-self: flex-start; min-height: 44px; }
+.br-session-detail > h1,
+.br-session-detail > h2,
+.br-session-detail > p { flex: none; margin: 0; }
+.br-session-detail > h1 { font-size: clamp(1.3rem, 4dvh, 2rem); }
+.br-session-detail > h2 { font-size: clamp(1rem, 3dvh, 1.5rem); }
+.br-session-detail > .br-room-table-wrap { flex: 0 1 auto; max-height: 25%; overflow: auto; }
+.br-session-detail .br-room-table caption { margin: 0.25rem 0; }
+.br-session-rounds { flex: 1; min-height: 0; overflow-y: auto; }
+.br-session-rounds .br-result-card { margin: 0 0 0.75rem; }
+
+@media (max-width: 650px) {
+  .br-page { padding: 0.75rem; }
+  .br-page-with-help { padding-top: 3.75rem; }
+  .br-help-trigger { top: 0.5rem; right: 0.75rem; }
+  .br-lobby-share { gap: 0.5rem; }
+  .br-lobby { padding: 0.75rem; }
+  .br-top-bar { padding: 0.4rem 0.5rem; }
+  .br-round-results { min-height: 0; padding: 0.5rem; }
+  .br-reveal-player { padding: 0.5rem; }
+  .br-room-history { max-height: 25dvh; }
+  .br-finished .br-reveal-artifact-image { max-height: 15dvh; }
+}
+
+@media (max-height: 600px) {
+  .br-page-with-help { padding-top: 0.75rem; }
+  .br-help-trigger { width: 36px; height: 36px; top: 0.5rem; }
+  .br-landing .br-header { margin-bottom: 0.25rem; }
+  .br-landing .br-title { font-size: clamp(1.2rem, 4dvh, 2rem); }
+  .br-landing .br-home-artwork { flex-basis: clamp(32px, 10dvh, 80px); }
+  .br-lobby { gap: 0.5rem; }
+  .br-qr svg { width: clamp(60px, 14dvh, 100px); }
+  .br-room-history.is-open { max-height: 22dvh; }
+}

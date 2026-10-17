@@ -26,7 +26,7 @@ export default function RoomHistory({ roomId, revision }) {
       .catch(err => { if (err.name !== 'AbortError') setError(err.message); });
     return () => controller.abort();
   }, [roomId, tab, memberId, page, revision]);
-  return <section className="br-room-history">
+  return <section className={`br-room-history${tab ? ' is-open' : ''}`}>
     <div className="br-room-tabs" aria-label="Room history">
       <button className="br-history-button" aria-expanded={tab === 'standings'} onClick={() => setTab(tab === 'standings' ? null : 'standings')}>Room Standings</button>
       <button className="br-history-button" aria-expanded={tab === 'sessions'} onClick={() => setTab(tab === 'sessions' ? null : 'sessions')}>Sessions</button>
