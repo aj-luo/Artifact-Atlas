@@ -1,5 +1,7 @@
 'use client';
 
+import BattleRoyaleHelp from './BattleRoyaleHelp';
+import './battleRoyale.css';
 import Footer from '../../Footer/Footer.jsx';
 import styles from './layout.module.css';
 import logo from '../../assets/AA_logo.png';
@@ -27,6 +29,7 @@ export default function BattleRoyaleLayout({ children }) {
           <a href="https://www.halfdome.games/" target="_blank" rel="noreferrer" aria-label="Half Dome Games">
             <img className={styles.halfDomeLogo} src={halfdome.src} alt="" />
           </a>
+          <BattleRoyaleHelp />
         </nav>
       </header>
       <main className={styles.main}>{children}</main>

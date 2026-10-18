@@ -34,6 +34,7 @@ export default function BattleRoyaleHelp() {
           ×
         </button>
       </div>
+      <div className="br-dialog-content">
       <p>Before the round timer ends, guess the artifact’s country of origin and a year.</p>
       <ul>
         <li><strong>Place:</strong> Start with 2,500 points. Lose one point for each rounded kilometer between the guessed and correct countries’ capitals.</li>
@@ -41,6 +42,7 @@ export default function BattleRoyaleHelp() {
       </ul>
       <p>Each part stops at zero, for a maximum of 5,000 points per round.</p>
       <p>After each round, you lose HP equal to the difference between your score and the round’s best score. A missed guess scores zero. You’re eliminated when your HP reaches zero.</p>
+      </div>
     </dialog>
   </>;
 }
