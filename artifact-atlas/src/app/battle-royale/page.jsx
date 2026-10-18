@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { notifications } from '@mantine/notifications';
 import './battleRoyale.css';
-import logo from '../../assets/AA_logo.png';
 import multiplayer from '../../assets/multiplayer.png';
 import AutoAdvanceSwitch from './AutoAdvanceSwitch';
 import BattleRoyaleHelp from './BattleRoyaleHelp';
@@ -77,7 +76,6 @@ export default function BattleRoyaleLobby() {
     <div className="br-page br-page-with-help br-landing">
       <BattleRoyaleHelp />
       <div className="br-header">
-        <img src={logo.src} className="br-logo" alt="Artifact Atlas" />
         <h1 className="br-title">BATTLE ROYALE</h1>
       </div>
 
