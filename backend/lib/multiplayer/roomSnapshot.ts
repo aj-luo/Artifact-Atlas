@@ -1,4 +1,5 @@
 import { db } from '@/lib/db';
+import type { Prisma } from '@prisma/client';
 import { GameSessionError, type GameStatusResponse } from './GameSession';
 
 export interface RoomSnapshot extends Omit<GameStatusResponse, 'gameId'> {
@@ -14,8 +15,8 @@ export interface RoomSnapshot extends Omit<GameStatusResponse, 'gameId'> {
 // One PostgreSQL statement sees one MVCC snapshot. Reading the revision, roster,
 // session and guesses together avoids both mixed revisions and network round trips.
 // Select public fields explicitly; room member credential hashes never leave SQL.
-export async function readRoomSnapshot(roomId: string): Promise<RoomSnapshot> {
-  const rows = await db.$queryRaw<Array<{ snapshot: RoomSnapshot }>>`
+export async function readRoomSnapshot(roomId: string, client: Prisma.TransactionClient = db): Promise<RoomSnapshot> {
+  const rows = await client.$queryRaw<Array<{ snapshot: RoomSnapshot }>>`
     SELECT jsonb_build_object(
       'roomId', r.id, 'gameId', r.current_session_id, 'currentSessionId', r.current_session_id,
       'sessionNumber', r.session_count, 'revision', r.revision, 'serverTime', clock_timestamp(),

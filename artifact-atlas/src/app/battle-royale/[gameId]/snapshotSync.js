@@ -50,6 +50,19 @@ export function getRoomPhase(snapshot, serverNow) {
     canGuess: timeRemaining !== 0, revealPending: false };
 }
 
+// Capture only accepted snapshots, so delayed updates cannot freeze a later round.
+// This value is for display; phase transitions and expiry still use server time.
+export function getFrozenRoundTimer(previous, snapshot, serverNow) {
+  const { timeRemaining } = getRoomPhase(snapshot, serverNow);
+  if (timeRemaining == null) return null;
+  if (previous && previous.roomId === snapshot.roomId
+    && previous.sessionId === snapshot.currentSessionId && previous.round === snapshot.currentRound) return previous;
+  const activePlayers = snapshot.players?.filter(player => !player.isEliminated) ?? [];
+  if (!activePlayers.length || !activePlayers.every(player => player.hasGuessedThisRound)) return null;
+  return { roomId: snapshot.roomId, sessionId: snapshot.currentSessionId,
+    round: snapshot.currentRound, seconds: timeRemaining };
+}
+
 export function getRecoveryPollInterval(channelStatus, statusError, phase) {
   if (channelStatus !== 'SUBSCRIBED' || statusError) return 2000;
   if (phase === 'finished') return 30000;

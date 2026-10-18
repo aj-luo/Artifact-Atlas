@@ -1,3 +1,4 @@
+import { prepareNextArtifact } from '@/lib/multiplayer/artifactReservation';
 import { after, NextResponse } from 'next/server';
 import { GameSessionError } from '@/lib/multiplayer/GameSession';
 import { broadcastRoom, credential, isUuid, joinRoom, roomStatus, transitionRoom } from '@/lib/multiplayer/Room';
@@ -19,7 +20,10 @@ export async function GET(req: Request, { params }: Params) {
     if (!isUuid(roomId)) throw new GameSessionError('Invalid room ID');
     if (action === 'status') {
       const snapshot = await roomStatus(roomId,
-        snapshot => after(() => broadcastRoom(roomId, snapshot)));
+        snapshot => after(async () => {
+          await broadcastRoom(roomId, snapshot);
+          if (snapshot.status === 'active' && snapshot.currentSessionId) await prepareNextArtifact(snapshot.currentSessionId, snapshot.currentRound);
+        }));
       return NextResponse.json(snapshot, { headers: {
         'X-Room-Processing-Ms': String(performance.now() - requestedAt),
       } });
@@ -39,7 +43,10 @@ export async function POST(req: Request, { params }: Params) {
     if (!body || typeof body !== 'object') throw new GameSessionError('Invalid request');
     const snapshot = action === 'join' ? await joinRoom(roomId, body.name, credential(req))
       : await transitionRoom(roomId, action, credential(req), body.expectedSessionId, body.memberId, body);
-    after(() => broadcastRoom(roomId, snapshot));
+    after(async () => {
+      await broadcastRoom(roomId, snapshot);
+      if (action === 'start' && snapshot.currentSessionId) await prepareNextArtifact(snapshot.currentSessionId, snapshot.currentRound);
+    });
     return NextResponse.json(snapshot);
   } catch (error) { return failure(error); }
 }

@@ -217,6 +217,7 @@ model multiplayer_games {
   guesses             multiplayer_guesses[]
   players             multiplayer_players[]
   current_in_room     multiplayer_rooms?    @relation("CurrentSession")
+  artifact_reservations multiplayer_artifact_reservations[]
   resolution_claims   multiplayer_round_resolution_claims[]
 
   @@unique([room_id, session_number])
@@ -313,4 +314,15 @@ model description {
   game_id     String?  @db.Uuid
   player_id   String?  @db.Uuid
   description String?
+}
+
+model multiplayer_artifact_reservations {
+  session_id   String @db.Uuid
+  round_number Int
+  claim_token  String @db.Uuid
+  expires_at   DateTime @db.Timestamptz(6)
+  artifact     Json?
+  game         multiplayer_games @relation(fields: [session_id], references: [id], onDelete: Cascade)
+
+  @@id([session_id, round_number])
 }

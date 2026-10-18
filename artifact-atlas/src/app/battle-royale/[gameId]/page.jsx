@@ -8,7 +8,7 @@ import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
 import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
-import { estimateServerClockOffset, getRecoveryPollInterval, getRoomPhase, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { estimateServerClockOffset, getFrozenRoundTimer, getRecoveryPollInterval, getRoomPhase, shouldApplyRoomSnapshot } from './snapshotSync.js';
 import '../battleRoyale.css';
 import RoundResultCard from '../RoundResultCard';
 import RoomHistory from '../RoomHistory';
@@ -29,9 +29,11 @@ const formatYear = (y) => {
 export default function BattleRoyaleRoom() {
   const { gameId } = useParams();
   const router = useRouter();
+  const lastVisibleResultsRef = useRef(null);
   const roomIdRef = useRef(gameId);
   roomIdRef.current = gameId;
   const [gameState, setGameState] = useState(null);
+  const [frozenRoundTimer, setFrozenRoundTimer] = useState(null);
   const [identity, setIdentity] = useState(null);
   const memberId = identity?.memberId;
   const isMember = !!gameState?.members?.some(m => m.id === memberId);
@@ -63,7 +65,12 @@ export default function BattleRoyaleRoom() {
   const bestClockRoundTripRef = useRef(Infinity);
   const phase = getRoomPhase(gameState, Date.now() + serverClockOffsetRef.current);
   const { revealPending, timeRemaining } = phase;
-  const intermission = { ...phase, phase: phase.phase === 'playing' ? 'none' : phase.phase };
+  const hasFrozenRoundTimer = frozenRoundTimer != null && frozenRoundTimer.roomId === gameId
+    && frozenRoundTimer.sessionId === gameState?.currentSessionId && frozenRoundTimer.round === gameState?.currentRound;
+  const displayedTimeRemaining = hasFrozenRoundTimer ? frozenRoundTimer.seconds : timeRemaining;
+  // Keep the loading view visible if resolution outlasts the original deadline.
+  const isLoadingResults = hasFrozenRoundTimer && timeRemaining != null;
+  const intermission = { ...phase, phase: phase.phase === 'playing' || isLoadingResults ? 'none' : phase.phase };
 
   const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
@@ -76,6 +83,7 @@ export default function BattleRoyaleRoom() {
     bestClockRoundTripRef.current = Infinity;
     serverClockOffsetRef.current = 0;
     setGameState(null);
+    setFrozenRoundTimer(null);
     setStatusError(null);
     try {
       const saved = JSON.parse(localStorage.getItem(`br_member_${gameId}`) ?? 'null');
@@ -110,6 +118,8 @@ export default function BattleRoyaleRoom() {
       serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt, processingMs);
     }
     setStatusError(null);
+    const serverNow = Date.now() + serverClockOffsetRef.current;
+    setFrozenRoundTimer(previous => getFrozenRoundTimer(previous, data, serverNow));
     setGameState(data);
     const pending = pendingGuessRef.current;
     if (pending && data.currentSessionId === pending.sessionId && data.currentRound === pending.round
@@ -179,6 +189,17 @@ export default function BattleRoyaleRoom() {
     debounceRef.current = setTimeout(fetchStatus, 50);
   }, [fetchStatus]);
 
+  useEffect(() => {
+    if (!gameState?.lastRoundReveal || revealPending || !['results', 'finished'].includes(phase.phase)) return;
+    const key = `${gameState.currentSessionId}:${gameState.lastRoundReveal.round}`;
+    if (lastVisibleResultsRef.current === key) return;
+    lastVisibleResultsRef.current = key;
+    console.debug('[multiplayer/visible]', JSON.stringify({ roomId: gameId,
+      sessionId: gameState.currentSessionId, round: gameState.lastRoundReveal.round,
+      revision: gameState.revision, visibleAt: new Date().toISOString(), resultsRevealAt: gameState.resultsRevealAt,
+      revealLatenessMs: Date.now() + serverClockOffsetRef.current - Date.parse(gameState.resultsRevealAt) }));
+  }, [gameId, gameState, revealPending, phase.phase]);
+
   // Supabase realtime channel — broadcast (fast path) + postgres_changes (fallback)
   useEffect(() => {
     void fetchStatus();
@@ -188,6 +209,11 @@ export default function BattleRoyaleRoom() {
       // Broadcast: full game state delivered by the server directly after each mutation,
       // no HTTP round-trip needed on the client side.
       .on('broadcast', { event: 'room_update' }, ({ payload }) => {
+        console.debug('[multiplayer/receipt]', JSON.stringify({ roomId: gameId, sessionId: payload.currentSessionId,
+          revision: payload.revision, receivedAt: new Date().toISOString(),
+          resultsRevealAt: payload.resultsRevealAt, serverTime: payload.serverTime,
+          snapshotAgeMs: Date.now() + serverClockOffsetRef.current - Date.parse(payload.serverTime),
+          revealInMs: payload.resultsRevealAt ? Date.parse(payload.resultsRevealAt) - Date.now() - serverClockOffsetRef.current : null }));
         applySnapshot(payload);
       })
       // postgres_changes: safety fallback for any broadcast misses
@@ -322,7 +348,7 @@ export default function BattleRoyaleRoom() {
       if (res.ok) {
         const data = await res.json();
         if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
-        applySnapshot(data, requestedAt, Date.now());
+        applySnapshot(data, requestedAt, Date.now(), Number(res.headers.get('X-Room-Processing-Ms') ?? 0));
       } else {
         const data = await res.json().catch(() => null);
         if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
@@ -441,8 +467,8 @@ export default function BattleRoyaleRoom() {
               </button>
             )}
           </div>
-          {!isIntermission && timeRemaining !== null && (
-            <div className={`br-timer ${timeRemaining < 10 ? 'urgent' : ''}`}>{timeRemaining}s</div>
+          {!isIntermission && displayedTimeRemaining !== null && (
+            <div className={`br-timer ${displayedTimeRemaining < 10 ? 'urgent' : ''}`}>{displayedTimeRemaining}s</div>
           )}
         </div>
 
@@ -488,7 +514,7 @@ export default function BattleRoyaleRoom() {
           <div className="br-controls-pane" inert={isIntermission}>
               {!me ? <div className="br-waiting">Spectating this session</div> : me?.isEliminated ? (
               <div className="br-eliminated">You were eliminated. Spectating…</div>
-            ) : !isIntermission && timeRemaining === 0 ? (
+            ) : !isIntermission && displayedTimeRemaining === 0 ? (
               <div className="br-waiting">Time’s up — loading results…</div>
             ) : me?.hasGuessedThisRound || pendingGuess?.scope === submissionScope ? (
               <div className="br-waiting">{guessedCount === activePlayers.length ? 'Loading results…' : 'Guess submitted — waiting for others…'}</div>
@@ -627,7 +653,7 @@ export default function BattleRoyaleRoom() {
       {statusError && <p className="br-error" role="status">{statusError}</p>}
       {startError && <p className="br-error" role="alert">{startError}</p>}
       {gameState.status === 'waiting'  && renderLobby()}
-      {gameState.status === 'active' && (phase.phase === 'syncing'
+      {gameState.status === 'active' && (phase.phase === 'syncing' && !isLoadingResults
         ? <div className="br-waiting" role="status">Round complete — syncing results…</div>
         : renderActive())}
       {gameState.status === 'finished' && (revealPending

@@ -1,6 +1,66 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getRecoveryPollInterval, getRoomPhase, estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, isResultsRevealPending, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { getFrozenRoundTimer, getRecoveryPollInterval, getRoomPhase, estimateServerClockOffset, getIntermissionPhase, getRoundTimeRemaining, isResultsRevealPending, shouldApplyRevision, shouldApplyRoomSnapshot } from './snapshotSync.js';
+
+const timerSnapshot = {
+  roomId: 'room', currentSessionId: 'session', currentRound: 1, revision: 1, status: 'active',
+  roundStartsAt: new Date(0).toISOString(), roundEndsAt: new Date(60000).toISOString(),
+  players: [{ hasGuessedThisRound: true }, { hasGuessedThisRound: false },
+    { isEliminated: true, hasGuessedThisRound: false }],
+};
+const allGuessedSnapshot = { ...timerSnapshot,
+  players: timerSnapshot.players.map(player => player.isEliminated ? player : { ...player, hasGuessedThisRound: true }) };
+
+test('the display counts down while others play and freezes throughout ten seconds of results loading', () => {
+  assert.equal(getFrozenRoundTimer(null, timerSnapshot, 45000), null);
+  assert.equal(getRoomPhase(timerSnapshot, 45000).timeRemaining, 15);
+  assert.equal(getFrozenRoundTimer(null, timerSnapshot, 46000), null);
+  assert.equal(getRoomPhase(timerSnapshot, 46000).timeRemaining, 14);
+  const frozen = getFrozenRoundTimer(null, allGuessedSnapshot, 55000);
+  assert.equal(frozen.seconds, 5);
+  for (let now = 55000; now <= 65000; now += 1000) {
+    assert.equal(getFrozenRoundTimer(frozen, allGuessedSnapshot, now).seconds, 5);
+  }
+  assert.equal(getRoomPhase(allGuessedSnapshot, 65000).timeRemaining, 0);
+  assert.equal(getRoomPhase(allGuessedSnapshot, 65000).canGuess, false);
+});
+
+test('expiry freezes at zero and the next round gets a fresh authoritative countdown', () => {
+  const frozen = getFrozenRoundTimer(null, allGuessedSnapshot, 60000);
+  assert.equal(frozen.seconds, 0);
+  assert.equal(getFrozenRoundTimer(frozen, allGuessedSnapshot, 70000).seconds, 0);
+  const nextRound = { ...timerSnapshot, currentRound: 2,
+    roundStartsAt: new Date(80000).toISOString(), roundEndsAt: new Date(140000).toISOString() };
+  assert.equal(getFrozenRoundTimer(frozen, nextRound, 75000), null);
+  assert.equal(getRoomPhase(nextRound, 75000).countdown, 5);
+  assert.equal(getFrozenRoundTimer(frozen, nextRound, 80000), null);
+  assert.equal(getRoomPhase(nextRound, 80000).timeRemaining, 60);
+});
+
+test('a frozen value resets across rooms, sessions, rounds, and results phases', () => {
+  const frozen = getFrozenRoundTimer(null, allGuessedSnapshot, 45000);
+  for (const change of [{ roomId: 'other-room' }, { currentSessionId: 'rematch' }, { currentRound: 2 },
+    { status: 'waiting' }, { status: 'finished' }, { awaitingHost: true },
+    { resultsRevealAt: new Date(50000).toISOString() }, { roundStartsAt: new Date(50000).toISOString() }]) {
+    assert.equal(getFrozenRoundTimer(frozen, { ...timerSnapshot, ...change }, 45000), null);
+  }
+  assert.equal(getFrozenRoundTimer(null, { ...allGuessedSnapshot, players: [] }, 45000), null);
+});
+
+test('delayed snapshots cannot restore a freeze from an earlier round', () => {
+  let snapshot = allGuessedSnapshot;
+  let frozen = getFrozenRoundTimer(null, snapshot, 45000);
+  const apply = incoming => {
+    if (!shouldApplyRoomSnapshot(snapshot.revision, incoming, snapshot.roomId)) return;
+    snapshot = incoming;
+    frozen = getFrozenRoundTimer(frozen, incoming, 46000);
+  };
+  apply({ ...timerSnapshot, currentRound: 2, revision: 2 });
+  assert.equal(frozen, null);
+  apply(allGuessedSnapshot);
+  assert.equal(snapshot.currentRound, 2);
+  assert.equal(frozen, null);
+});
 
 test('finished results share a reveal deadline across clock offsets and late arrivals', () => {
   const revealAt = Date.parse('2026-09-12T12:00:20.000Z');

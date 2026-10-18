@@ -43,11 +43,9 @@ export async function roomStatus(roomId: string, onResolved?: (snapshot: Awaited
   if (!expired && !allGuessed) return snapshot;
 
   // Only resolution needs the session service and its transactional lock checks.
-  const session = await GameSession.load(snapshot.currentSessionId);
-  const resolved = await session?.resolveRoundIfNeeded() ?? false;
-  const current = await roomSnapshot(roomId);
-  if (resolved) onResolved?.(current);
-  return current;
+  const game = await db.multiplayer_games.findUnique({ where: { id: snapshot.currentSessionId } });
+  const prepared = game ? await GameSession.resolveAuthorizedRound({ game }, async current => { onResolved?.(current); }) : null;
+  return prepared ?? await roomSnapshot(roomId);
 }
 
 export async function joinRoom(roomId: string, name: unknown, token: string) {
@@ -158,19 +156,30 @@ export interface GuessAuthorization {
 
 export async function authorizeGuess(gameId: string, token: string, playerId: string): Promise<GuessAuthorization> {
   if (!isUuid(gameId) || !isUuid(playerId)) throw new GameSessionError('Invalid session or player ID');
-  const game = await db.multiplayer_games.findUnique({ where: { id: gameId } });
-  if (!game?.room_id) throw new GameSessionError('Session not found', 404);
-  const [member, room] = await Promise.all([
-    authenticate(db, game.room_id, token),
-    db.multiplayer_rooms.findUnique({ where: { id: game.room_id } }),
-  ]);
-  if (room?.current_session_id !== gameId || room.status !== 'active') throw new GameSessionError('Session is no longer active', 409);
-  const player = await db.multiplayer_players.findFirst({ where: { id: playerId, game_id: gameId, member_id: member.id } });
-  if (!player) throw new GameSessionError('Player does not belong to this member', 403);
-  return { roomId: game.room_id, memberId: member.id, game };
+  if (!/^[a-f0-9]{64}$/.test(token)) throw new GameSessionError('Room credential required', 401);
+  const rows = await db.$queryRaw<Array<multiplayer_games & {
+    authorized_member_id: string | null; room_status: string; current_session_id: string | null;
+    authorized_player_id: string | null;
+  }>>`
+    SELECT g.*, r.status AS room_status, r.current_session_id,
+      m.id AS authorized_member_id, p.id AS authorized_player_id
+    FROM multiplayer_games g
+    JOIN multiplayer_rooms r ON r.id = g.room_id
+    LEFT JOIN multiplayer_room_members m ON m.room_id = r.id
+      AND m.credential_hash = ${hash(token)} AND m.left_at IS NULL
+    LEFT JOIN multiplayer_players p ON p.game_id = g.id AND p.member_id = m.id AND p.id = ${playerId}::uuid
+    WHERE g.id = ${gameId}::uuid
+  `;
+  const row = rows[0];
+  if (!row?.room_id) throw new GameSessionError('Session not found', 404);
+  if (!row.authorized_member_id) throw new GameSessionError('Room membership is no longer active', 403);
+  if (row.current_session_id !== gameId || row.room_status !== 'active') throw new GameSessionError('Session is no longer active', 409);
+  if (!row.authorized_player_id) throw new GameSessionError('Player does not belong to this member', 403);
+  return { roomId: row.room_id, memberId: row.authorized_member_id, game: row };
 }
 
-export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnType<typeof roomSnapshot>>) {
+export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnType<typeof roomSnapshot>>, timing?: { requestId?: string; committedAt?: number; kind?: 'guess' | 'results' }) {
+  const started = performance.now();
   if (!reportBroadcastConfiguration(roomId)) return;
   try {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL!.trim().replace(/\/+$/, '');
@@ -180,11 +189,18 @@ export async function broadcastRoom(roomId: string, snapshot?: Awaited<ReturnTyp
       (snapshot ?? await roomSnapshot(roomId)) as Awaited<ReturnType<typeof roomSnapshot>>
         & { credential?: string; memberId?: string };
     const response = await fetch(`${url}/realtime/v1/api/broadcast`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, apikey: key },
+      method: 'POST', signal: AbortSignal.timeout(2000), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, apikey: key },
       body: JSON.stringify({ messages: [{ topic: `room-${roomId}`, event: 'room_update', payload }] }),
     });
+    console.info('[multiplayer/broadcast:timing]', JSON.stringify({
+      roomId, sessionId: payload.currentSessionId, round: payload.currentRound, revision: payload.revision,
+      requestId: timing?.requestId, kind: timing?.kind, httpMs: Math.round(performance.now() - started), status: response.status,
+      commitToBroadcastMs: timing?.committedAt == null ? undefined : Math.round(started - timing.committedAt),
+      commitToBroadcastCompleteMs: timing?.committedAt == null ? undefined : Math.round(performance.now() - timing.committedAt),
+    }));
     if (!response.ok) throw new Error(`Broadcast failed: ${response.status}`);
   } catch (error) { console.error('[multiplayer/broadcast:failure]', JSON.stringify({
-    roomId, sessionId: snapshot?.currentSessionId, error: String(error),
+    roomId, sessionId: snapshot?.currentSessionId, revision: snapshot?.revision,
+    requestId: timing?.requestId, kind: timing?.kind, httpMs: Math.round(performance.now() - started), error: String(error),
   })); }
 }
