@@ -113,7 +113,7 @@ export default function RoomHistory({ roomId, revision, onOpenRoundHistory }) {
                 const played = Math.max(member.sessionsPlayed, 1);
                 return <article className="br-standing-card" key={member.memberId} style={{ '--card-index': index }}>
                   <div className="br-standing-heading">
-                    <span className="br-standing-rank" aria-label={`Rank ${index + 1}`}>#{index + 1}</span>
+                    <span className={`br-standing-rank br-standing-rank-${Math.min(index + 1, 4)}`} aria-label={`Rank ${index + 1}`}>#{index + 1}</span>
                     <div className="br-standing-player"><strong>{member.name}</strong>{member.departed && <span className="br-standing-departed">Left room</span>}</div>
                     <button className="br-history-button br-standing-sessions" onClick={() => { setMemberId(member.memberId); setPage(1); setTab('sessions'); }}>View sessions<span aria-hidden="true"> →</span></button>
                   </div>
