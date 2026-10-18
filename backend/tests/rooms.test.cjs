@@ -34,10 +34,13 @@ function services(db, options = {}) {
     mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, file);
     return mod.exports;
   }
-  return { ...(options.after ? { guessRoute: load('app/api/multiplayer/[gameId]/guess/route.ts') } : {}), ...load('lib/multiplayer/artifactReservation.ts'), ...load('lib/multiplayer/Room.ts'), ...load('lib/multiplayer/history.ts'), ...load('lib/multiplayer/GameSession.ts'), ...load('lib/multiplayer/placements.ts') };
+  return { ...(options.after ? { guessRoute: load('app/api/multiplayer/[gameId]/guess/route.ts') } : {}),
+    ...(options.createRoute ? { createRoute: load('app/api/multiplayer/create/route.ts') } : {}),
+    ...load('lib/multiplayer/artifactReservation.ts'), ...load('lib/multiplayer/Room.ts'),
+    ...load('lib/multiplayer/history.ts'), ...load('lib/multiplayer/GameSession.ts'), ...load('lib/multiplayer/placements.ts') };
 }
 
-async function fresh() {
+async function fresh({ skipDefaultMigration = false } = {}) {
   const pg = new PGlite();
   await pg.exec(baseline);
   await pg.exec(migration);
@@ -45,10 +48,34 @@ async function fresh() {
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20260915000000_manual_round_advance/migration.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261015000000_round_resolution_claims/migration.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261018000000_artifact_reservations/migration.sql'), 'utf8'));
+  if (!skipDefaultMigration) await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261018000001_manual_rounds_default/migration.sql'), 'utf8'));
   return { pg, db: postgresClient(pg) };
 }
 
 const rejected = (promise, status) => assert.rejects(promise, error => error.statusCode === status);
+
+test('new rooms default to manual advancement while explicit automatic settings survive the migration', async () => {
+  const { pg, db } = await fresh({ skipDefaultMigration: true });
+  try {
+    const automatic = await db.multiplayer_rooms.create({ data: { auto_advance_rounds: true } });
+    const manual = await db.multiplayer_rooms.create({ data: { auto_advance_rounds: false } });
+    await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261018000001_manual_rounds_default/migration.sql'), 'utf8'));
+    assert.equal((await db.multiplayer_rooms.findUnique({ where: { id: automatic.id } })).auto_advance_rounds, true);
+    assert.equal((await db.multiplayer_rooms.findUnique({ where: { id: manual.id } })).auto_advance_rounds, false);
+    assert.equal((await db.multiplayer_rooms.create({ data: {} })).auto_advance_rounds, false);
+
+    const { createRoute } = services(db, { createRoute: true });
+    async function create(body) {
+      const response = await createRoute.POST(new Request('http://example.test/api/multiplayer/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      }));
+      assert.equal(response.status, 201);
+      return db.multiplayer_rooms.findUnique({ where: { id: (await response.json()).roomId } });
+    }
+    assert.equal((await create({})).auto_advance_rounds, false);
+    assert.equal((await create({ autoAdvanceRounds: true })).auto_advance_rounds, true);
+  } finally { await pg.close(); }
+});
 
 test('stale concurrent guess views recover without double finalization', async () => {
   const { pg, db } = await fresh();
@@ -117,7 +144,7 @@ test('rematches, credentials, membership changes, atomic results, and history', 
   const { pg, db } = await fresh();
   try {
     const s = services(db);
-    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 3 } });
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 3, auto_advance_rounds: true } });
     const host = await s.joinRoom(room.id, 'Host', '');
     const second = await s.joinRoom(room.id, 'Second', '');
     const third = await s.joinRoom(room.id, 'Third', '');
@@ -153,9 +180,13 @@ test('rematches, credentials, membership changes, atomic results, and history', 
     }
     state = await playRound([1000, 500, 0]);
     assert.equal(state.currentRound, 2);
+    assert.deepEqual(state.lastRoundReveal.guesses.map(g => [g.hpLost, g.hpRemaining]), [[0, 1000], [500, 500], [1000, 0]]);
+    assert.deepEqual(state.roundHistory[0], state.lastRoundReveal);
     await rejected((await s.GameSession.load(firstId)).submitGuess(firstPlayers[0].id, 'USA', 1000, 1), 409);
     state = await playRound([1000, 0]);
     assert.equal(state.status, 'finished');
+    assert.deepEqual(state.lastRoundReveal.guesses.map(g => [g.hpLost, g.hpRemaining]), [[0, 1000], [500, 0], [0, 0]]);
+    assert.deepEqual(state.roundHistory[1], state.lastRoundReveal);
     const revealAt = state.resultsRevealAt;
     assert.ok(Number.isFinite(Date.parse(revealAt)));
     assert.ok(Date.parse(revealAt) > Date.now());
@@ -166,6 +197,7 @@ test('rematches, credentials, membership changes, atomic results, and history', 
     assert.deepEqual(await s.memberStatistics(room.id), before);
     assert.equal((await s.roomSnapshot(room.id)).resultsRevealAt, revealAt);
     const oldDetails = await s.sessionDetails(room.id, firstId);
+    assert.deepEqual(oldDetails.roundHistory, state.roundHistory);
     await Promise.all([s.transitionRoom(room.id, 'reopen', host.credential, firstId), s.transitionRoom(room.id, 'reopen', host.credential, firstId)]);
     state = await s.roomSnapshot(room.id);
     assert.equal(state.status, 'waiting');
@@ -287,7 +319,7 @@ test('shared starts, early reveals, deadlines, and rematches use database time',
   const { pg, db } = await fresh();
   try {
     const s = services(db);
-    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 2, countdown_seconds: 30 } });
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 2, countdown_seconds: 30, auto_advance_rounds: true } });
     const host = await s.joinRoom(room.id, 'Host', '');
     await s.joinRoom(room.id, 'Guest', '');
     let state = await s.transitionRoom(room.id, 'start', host.credential, null);
@@ -618,9 +650,10 @@ test('manual rooms hold results until a host advances the expected round', async
     const room = await db.multiplayer_rooms.create({ data: { max_rounds: 2 } });
     const host = await s.joinRoom(room.id, 'Host', '');
     const guest = await s.joinRoom(room.id, 'Guest', '');
-    assert.equal(host.autoAdvanceRounds, true);
+    assert.equal(host.autoAdvanceRounds, false);
     await rejected(s.transitionRoom(room.id, 'settings', guest.credential, null, undefined, { autoAdvanceRounds: false }), 403);
     await rejected(s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: 'false' }), 400);
+    assert.equal((await s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: true })).autoAdvanceRounds, true);
     await s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: false });
     let state = await s.transitionRoom(room.id, 'start', host.credential, null);
     const id = state.currentSessionId;

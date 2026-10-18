@@ -10,7 +10,7 @@ import AutoAdvanceSwitch from './AutoAdvanceSwitch';
 export default function BattleRoyaleLobby() {
   const router = useRouter();
   const [countdownSeconds, setCountdownSeconds] = useState(60);
-  const [autoAdvanceRounds, setAutoAdvanceRounds] = useState(true);
+  const [autoAdvanceRounds, setAutoAdvanceRounds] = useState(false);
   const [maxRounds, setMaxRounds] = useState(10);
   const [maxHealth, setMaxHealth] = useState(10000);
   const [joinGameId, setJoinGameId] = useState('');

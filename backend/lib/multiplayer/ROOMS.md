@@ -31,10 +31,13 @@ Validation
 
 Run `npm run test:rooms` in backend, `npx tsc --noEmit` in backend, `node --test snapshotSync.test.js` from `artifact-atlas/src/app/battle-royale/[gameId]`, and `npm run build` in both applications. The room suite uses isolated PGlite PostgreSQL databases and a small Prisma-shaped transport adapter to execute the production services. It tests migration fixtures, rematches, concurrent transition requests, capacity, credentials, stale guesses, host transfer, finalized statistics, ties, and transaction rollback. PGlite serializes transactions on one connection; multi-connection PostgreSQL lock contention and browser/Supabase delivery still require integration testing in the deployment environment.
 
-Rooms support `autoAdvanceRounds` (default `true`). Apply the additive
+Rooms support `autoAdvanceRounds` (default `false` for new rooms). Apply the additive
 `20260915000000_manual_round_advance` migration and regenerate Prisma before running
 this version. Creation accepts the boolean; the host can change it in a waiting
 lobby with `POST /api/rooms/:roomId/settings` and `{ expectedSessionId, autoAdvanceRounds }`.
+Apply `20261018000001_manual_rounds_default` to change the database default for
+new rooms only. Existing room settings are preserved, including enabled automatic
+advancement.
 The setting persists across rematches. With automatic advancement disabled, a
 resolved non-final round sets `awaitingHost: true` with null round timestamps;
 status polling and guesses cannot start that round. After results reveal, the host
@@ -42,6 +45,10 @@ uses `POST /api/rooms/:roomId/next-round` with `{ expectedSessionId, expectedRou
 (the snapshot's `currentRound`) to schedule a five-second countdown. Session/round
 checks and room/session locks reject stale or duplicate actions. Final results
 still finish the session immediately.
+
+Each new round result stores `hpRemaining` after damage alongside `hpLost` in
+the reveal and round history. Older saved rounds omit this field; clients show
+"Remaining HP unavailable" for those results. No historical HP is backfilled.
 
 Faster guess acceptance and results delivery
 
@@ -138,8 +145,9 @@ and both milliseconds and percentage improvement relative to the measured
 baseline. Compare visible delay against the reported six seconds separately;
 do not equate that anecdote with a measured baseline percentile.
 
-Local verification: 23 backend room tests, 14 frontend synchronization tests,
-TypeScript, Prisma schema validation, and both production builds passed. PGlite
+Local verification for the remaining-HP and default-setting changes: 24 backend
+room tests, backend TypeScript, the frontend production build, and shared result
+cards rendered at narrow and desktop widths passed. PGlite
 serializes transactions, so multi-connection lock contention, live Supabase
 broadcast delivery, actual cold instances, deployed region colocation and the
 production p50/p95 comparison remain deployment checks. The migration has not

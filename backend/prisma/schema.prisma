@@ -167,7 +167,7 @@ model multiplayer_rooms {
   max_health          Int                        @default(25000)
   countdown_seconds   Int                        @default(60)
   created_at          DateTime                   @default(now()) @db.Timestamptz(6)
-  auto_advance_rounds Boolean                    @default(true)
+  auto_advance_rounds Boolean                    @default(false)
   sessions            multiplayer_games[]        @relation("RoomSessions")
   members             multiplayer_room_members[]
   current_session     multiplayer_games?         @relation("CurrentSession", fields: [current_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)

@@ -140,13 +140,14 @@
 .br-reveal-label { color: var(--br-muted); font-size: .8rem; }
 .br-reveal-value { min-width: 0; text-align: right; overflow-wrap: anywhere; }
 .br-reveal-players { display: grid; gap: .5rem; }
-.br-reveal-player { line-height: 1.35; display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "name score" "guess damage"; gap: .4rem .65rem; padding: .65rem; border: 1px solid var(--br-border); border-radius: 8px; font-size: .85rem; }
+.br-reveal-player { line-height: 1.35; display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-areas: "name score" "guess damage" "remaining remaining"; gap: .25rem .65rem; padding: .65rem; border: 1px solid var(--br-border); border-radius: 8px; font-size: .85rem; }
 .br-reveal-player.is-you { border-color: #ffffff80; background: #ffffff08; }
 .br-reveal-player-name { grid-area: name; overflow-wrap: anywhere; font-weight: 700; }
 .br-reveal-player-guess { grid-area: guess; overflow-wrap: anywhere; color: #bbb; }
 .br-reveal-player-score { grid-area: score; text-align: right; font-weight: 700; }
 .br-reveal-player-dmg { grid-area: damage; text-align: right; color: #ffb1b1; }
 .br-reveal-player-dmg.best { color: #a7e0b7; }
+.br-reveal-player-remaining { grid-area: remaining; min-width: 0; text-align: right; color: #ccc; overflow-wrap: anywhere; }
 /* Game over uses the same two views at every size. */
 .br-finished { display: flex; flex-direction: column; gap: .75rem; width: min(100%, 960px); margin: auto 0; }
 .br-finished-announcement { order: -2; text-align: center; }

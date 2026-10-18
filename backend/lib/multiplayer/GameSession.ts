@@ -30,6 +30,7 @@ export interface RoundGuessResult {
   yearsAway: number | null;
   totalScore: number;
   hpLost: number;
+  hpRemaining?: number;
   isEliminated: boolean;
 }
 
@@ -563,6 +564,7 @@ export class GameSession {
           yearsAway: guess?.years_away ?? null,
           totalScore: guess?.total_score ?? 0,
           hpLost: Math.max(0, (healthBeforeRound[player.id] ?? player.health) - player.health),
+          hpRemaining: player.health,
           isEliminated: playersById[player.id]?.is_eliminated ?? false,
         };
       }),

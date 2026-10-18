@@ -38,6 +38,9 @@ export default function RoundResultCard({ round, playerId, history = false }) {
       <span className={`br-reveal-player-dmg ${guess.hpLost === 0 ? 'best' : ''}`}>
         {typeof guess.hpLost !== 'number' ? 'HP loss unavailable' : guess.hpLost === 0 ? 'No HP lost' : `-${guess.hpLost.toLocaleString()} HP`}
       </span>
+      <span className="br-reveal-player-remaining">
+        {typeof guess.hpRemaining === 'number' ? `${guess.hpRemaining.toLocaleString()} HP remaining` : 'Remaining HP unavailable'}
+      </span>
     </div>
   );
   return (
