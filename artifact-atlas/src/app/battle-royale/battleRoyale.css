@@ -187,13 +187,17 @@
 .br-standing-card, .br-session-card { padding: 1rem; border: 1px solid var(--br-border); border-radius: 10px; background: #ffffff04; }
 .br-standing-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .65rem; }
 .br-standing-rank { min-width: 2rem; font-weight: 700; }
+.br-standing-rank-1 { color: #d4af37; }
+.br-standing-rank-2 { color: #c0c0c0; }
+.br-standing-rank-3 { color: #cd7f32; }
+.br-standing-rank-4 { color: #8fa9c4; }
 .br-standing-player { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .br-standing-departed { display: block; font-size: .8rem; color: #bbb; }
 .br-standing-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: .4rem; margin: .75rem 0; }
 .br-standing-metrics span { display: grid; gap: .25rem; background: #ffffff0a; padding: .5rem; font-size: .75rem; color: #bbb; }
 .br-standing-metrics strong { color: #fff; font-size: 1.15rem; }
 .br-placement-bar { display: flex; height: 6px; border-radius: 4px; background: #555; }
-.br-placement-win { background: #eee; }.br-placement-second { background: #bbb; }.br-placement-third { background: #999; }.br-placement-other { background: #777; }
+.br-placement-win { background: #d4af37; }.br-placement-second { background: #c0c0c0; }.br-placement-third { background: #cd7f32; }.br-placement-other { background: #8fa9c4; }
 .br-standing-other { display: flex; flex-wrap: wrap; gap: .5rem; font-size: .8rem; color: #bbb; }
 .br-session-filter { display: grid; gap: .4rem; max-width: 360px; }
 .br-session-filter select { background: #242424; }
