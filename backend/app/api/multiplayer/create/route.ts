@@ -12,7 +12,7 @@ import { db } from '@/lib/db';
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({})) ?? {};
-    const autoAdvanceRounds = body.autoAdvanceRounds === undefined ? true : body.autoAdvanceRounds;
+    const autoAdvanceRounds = body.autoAdvanceRounds === undefined ? false : body.autoAdvanceRounds;
     if (typeof autoAdvanceRounds !== 'boolean') return NextResponse.json({ error: 'autoAdvanceRounds must be a boolean' }, { status: 400 });
     const countdownSeconds = body.countdownSeconds === undefined ? 60 : body.countdownSeconds;
     if (!Number.isInteger(countdownSeconds) || countdownSeconds < 30 || countdownSeconds > 120) {

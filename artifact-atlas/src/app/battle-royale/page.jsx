@@ -6,12 +6,11 @@ import { notifications } from '@mantine/notifications';
 import './battleRoyale.css';
 import multiplayer from '../../assets/multiplayer.png';
 import AutoAdvanceSwitch from './AutoAdvanceSwitch';
-import BattleRoyaleHelp from './BattleRoyaleHelp';
 
 export default function BattleRoyaleLobby() {
   const router = useRouter();
   const [countdownSeconds, setCountdownSeconds] = useState(60);
-  const [autoAdvanceRounds, setAutoAdvanceRounds] = useState(true);
+  const [autoAdvanceRounds, setAutoAdvanceRounds] = useState(false);
   const [maxRounds, setMaxRounds] = useState(10);
   const [maxHealth, setMaxHealth] = useState(10000);
   const [joinGameId, setJoinGameId] = useState('');
@@ -74,7 +73,6 @@ export default function BattleRoyaleLobby() {
 
   return (
     <div className="br-page br-page-with-help br-landing">
-      <BattleRoyaleHelp />
       <div className="br-header">
         <h1 className="br-title">BATTLE ROYALE</h1>
       </div>
@@ -87,11 +85,10 @@ export default function BattleRoyaleLobby() {
           </div>
 
           <div className="br-home-controls">
-            <div className="br-action-toggle" role="tablist" aria-label="Game action">
+            <div className="br-action-toggle" role="group" aria-label="Game action">
               <button
                 type="button"
-                role="tab"
-                aria-selected={lobbyAction === 'create'}
+                aria-pressed={lobbyAction === 'create'}
                 className={lobbyAction === 'create' ? 'is-active' : ''}
                 onClick={() => setLobbyAction('create')}
               >
@@ -99,8 +96,7 @@ export default function BattleRoyaleLobby() {
               </button>
               <button
                 type="button"
-                role="tab"
-                aria-selected={lobbyAction === 'join'}
+                aria-pressed={lobbyAction === 'join'}
                 className={lobbyAction === 'join' ? 'is-active' : ''}
                 onClick={() => setLobbyAction('join')}
               >
@@ -109,26 +105,26 @@ export default function BattleRoyaleLobby() {
             </div>
 
             <div className="br-home-panels">
-              <div className="br-card" aria-hidden={lobbyAction !== 'create'} inert={lobbyAction !== 'create'}>
+              {lobbyAction === 'create' && <div className="br-card">
                 <h2>Create a Game</h2>
                 <p>Host a new game and invite your friends.</p>
 
                 <div className="br-create-settings">
                   <div className="br-input-group">
-                    <label>Rounds: <span>{maxRounds}</span></label>
-                    <input type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
+                    <label htmlFor="br-rounds">Rounds: <span>{maxRounds}</span></label>
+                    <input id="br-rounds" type="range" min="5" max="20" step="1" value={maxRounds} onChange={(e) => setMaxRounds(Number(e.target.value))} className="br-slider" />
                     <small>Number of artifacts to guess (5–20).</small>
                   </div>
 
                   <div className="br-input-group">
-                    <label>Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
-                    <input type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
+                    <label htmlFor="br-health">Starting HP: <span>{maxHealth.toLocaleString()}</span></label>
+                    <input id="br-health" type="range" min="5000" max="20000" step="1000" value={maxHealth} onChange={(e) => setMaxHealth(Number(e.target.value))} className="br-slider" />
                     <small>Each player's starting health (5,000–20,000).</small>
                   </div>
 
                   <div className="br-input-group">
-                    <label>Round duration: <span>{countdownSeconds}s</span></label>
-                    <input type="range" min="30" max="120" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
+                    <label htmlFor="br-duration">Round duration: <span>{countdownSeconds}s</span></label>
+                    <input id="br-duration" type="range" min="30" max="120" step="5" value={countdownSeconds} onChange={(e) => setCountdownSeconds(Number(e.target.value))} className="br-slider" />
                     <small>Everyone has this long to guess from the start of each round.</small>
                   </div>
 
@@ -141,14 +137,15 @@ export default function BattleRoyaleLobby() {
                 <button className="br-btn br-btn-primary" onClick={handleCreateGame} disabled={isCreating}>
                   {isCreating ? 'CREATING...' : 'CREATE NEW GAME'}
                 </button>
-              </div>
-              <div className="br-card" aria-hidden={lobbyAction !== 'join'} inert={lobbyAction !== 'join'}>
+              </div>}
+              {lobbyAction === 'join' && <div className="br-card">
                 <h2>Join a Game</h2>
                 <p>Have a game code? Enter it below to join.</p>
 
                 <form onSubmit={handleJoinGame} className="br-join-form">
                   <input
                     type="text"
+                    aria-label="Game ID"
                     placeholder="Enter Game ID..."
                     value={joinGameId}
                     onChange={(e) => setJoinGameId(e.target.value)}
@@ -158,7 +155,7 @@ export default function BattleRoyaleLobby() {
                     {isChecking ? 'CHECKING...' : 'JOIN GAME'}
                   </button>
                 </form>
-              </div>
+              </div>}
             </div>
           </div>
         </div>

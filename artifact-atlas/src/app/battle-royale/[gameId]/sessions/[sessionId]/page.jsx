@@ -22,14 +22,14 @@ export default function HistoricalSession() {
   }, [roomId, sessionId]);
   const playerId = session?.players.find(p => p.memberId === memberId)?.id;
   const winners = session?.standings.filter(p => p.finalPlacement === 1) ?? [];
-  return <main className="br-page"><div className="br-session-detail">
+  return <div className="br-page"><div className="br-session-detail" tabIndex={0} role="region" aria-label="Session history">
     <Link className="br-history-button" href={`/battle-royale/${roomId}`}>Back to live room</Link>
     {error ? <p className="br-error" role="alert">{error}</p> : !session ? <p>Loading session…</p> : <>
       <h1>Session {session.sessionNumber}</h1>
       <p>{session.completedAt && new Date(session.completedAt).toLocaleString()}</p>
       <h2>{winners.length ? `${winners.length > 1 ? 'Joint winners' : 'Winner'}: ${winners.map(p => p.name).join(', ')}` : 'Placements unavailable'}</h2>
       {!session.placementsAvailable && <p>This legacy session has incomplete survival history. Unavailable placements are excluded from placement statistics.</p>}
-      <div className="br-room-table-wrap"><table className="br-room-table"><caption>Session standings</caption>
+      <div className="br-room-table-wrap" tabIndex={0} role="region" aria-label="Session standings"><table className="br-room-table"><caption>Session standings</caption>
         <thead><tr><th>Place</th><th>Player</th><th>HP</th><th>Total score</th><th>Eliminated in round</th></tr></thead>
         <tbody>{session.standings.map(p => <tr key={p.id}><td data-label="Place">{p.finalPlacement ?? 'Unavailable'}</td><td data-label="Player">{p.name}</td><td data-label="HP">{p.health.toLocaleString()}</td><td data-label="Total score">{p.cumulativeScore.toLocaleString()}</td><td data-label="Eliminated in round">{p.eliminationRound ?? (p.isEliminated ? 'Unavailable' : 'Survived')}</td></tr>)}</tbody>
       </table></div>
@@ -39,5 +39,5 @@ export default function HistoricalSession() {
         {session.roundHistory.map(round => <RoundResultCard key={round.round} round={round} playerId={playerId} history />)}
       </div>
     </>}
-  </div></main>;
+  </div></div>;
 }

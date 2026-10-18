@@ -23,6 +23,7 @@ function services(db, options = {}) {
     mod.paths = Module._nodeModulePaths(root);
     cache.set(file, mod);
     mod.require = name => {
+      if (name === 'next/server' && options.after) return { ...require(name), after: options.after };
       if (name === '@/lib/db') return { db };
       if (name === '@/lib/artifactSelector') return { pickRandomArtifact: options.pickRandomArtifact ?? (async () => ({ objectId: 1n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'https://example.test/art.jpg', title: 'Test artifact' })) };
       if (name === './scoring') return { ScoringModule: { calculateScore: async (_country, _actual, year) => ({ totalScore: year, countryScore: year, yearScore: 0, distanceKm: 0, yearsAway: 0 }) } };
@@ -33,20 +34,48 @@ function services(db, options = {}) {
     mod._compile(ts.transpileModule(fs.readFileSync(file, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText, file);
     return mod.exports;
   }
-  return { ...load('lib/multiplayer/Room.ts'), ...load('lib/multiplayer/history.ts'), ...load('lib/multiplayer/GameSession.ts'), ...load('lib/multiplayer/placements.ts') };
+  return { ...(options.after ? { guessRoute: load('app/api/multiplayer/[gameId]/guess/route.ts') } : {}),
+    ...(options.createRoute ? { createRoute: load('app/api/multiplayer/create/route.ts') } : {}),
+    ...load('lib/multiplayer/artifactReservation.ts'), ...load('lib/multiplayer/Room.ts'),
+    ...load('lib/multiplayer/history.ts'), ...load('lib/multiplayer/GameSession.ts'), ...load('lib/multiplayer/placements.ts') };
 }
 
-async function fresh() {
+async function fresh({ skipDefaultMigration = false } = {}) {
   const pg = new PGlite();
   await pg.exec(baseline);
   await pg.exec(migration);
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20260914000000_results_reveal/migration.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20260915000000_manual_round_advance/migration.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261015000000_round_resolution_claims/migration.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261018000000_artifact_reservations/migration.sql'), 'utf8'));
+  if (!skipDefaultMigration) await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261018000001_manual_rounds_default/migration.sql'), 'utf8'));
   return { pg, db: postgresClient(pg) };
 }
 
 const rejected = (promise, status) => assert.rejects(promise, error => error.statusCode === status);
+
+test('new rooms default to manual advancement while explicit automatic settings survive the migration', async () => {
+  const { pg, db } = await fresh({ skipDefaultMigration: true });
+  try {
+    const automatic = await db.multiplayer_rooms.create({ data: { auto_advance_rounds: true } });
+    const manual = await db.multiplayer_rooms.create({ data: { auto_advance_rounds: false } });
+    await pg.exec(fs.readFileSync(path.join(root, 'prisma/migrations/20261018000001_manual_rounds_default/migration.sql'), 'utf8'));
+    assert.equal((await db.multiplayer_rooms.findUnique({ where: { id: automatic.id } })).auto_advance_rounds, true);
+    assert.equal((await db.multiplayer_rooms.findUnique({ where: { id: manual.id } })).auto_advance_rounds, false);
+    assert.equal((await db.multiplayer_rooms.create({ data: {} })).auto_advance_rounds, false);
+
+    const { createRoute } = services(db, { createRoute: true });
+    async function create(body) {
+      const response = await createRoute.POST(new Request('http://example.test/api/multiplayer/create', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      }));
+      assert.equal(response.status, 201);
+      return db.multiplayer_rooms.findUnique({ where: { id: (await response.json()).roomId } });
+    }
+    assert.equal((await create({})).auto_advance_rounds, false);
+    assert.equal((await create({ autoAdvanceRounds: true })).auto_advance_rounds, true);
+  } finally { await pg.close(); }
+});
 
 test('stale concurrent guess views recover without double finalization', async () => {
   const { pg, db } = await fresh();
@@ -115,7 +144,7 @@ test('rematches, credentials, membership changes, atomic results, and history', 
   const { pg, db } = await fresh();
   try {
     const s = services(db);
-    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 3 } });
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 3, auto_advance_rounds: true } });
     const host = await s.joinRoom(room.id, 'Host', '');
     const second = await s.joinRoom(room.id, 'Second', '');
     const third = await s.joinRoom(room.id, 'Third', '');
@@ -151,9 +180,13 @@ test('rematches, credentials, membership changes, atomic results, and history', 
     }
     state = await playRound([1000, 500, 0]);
     assert.equal(state.currentRound, 2);
+    assert.deepEqual(state.lastRoundReveal.guesses.map(g => [g.hpLost, g.hpRemaining]), [[0, 1000], [500, 500], [1000, 0]]);
+    assert.deepEqual(state.roundHistory[0], state.lastRoundReveal);
     await rejected((await s.GameSession.load(firstId)).submitGuess(firstPlayers[0].id, 'USA', 1000, 1), 409);
     state = await playRound([1000, 0]);
     assert.equal(state.status, 'finished');
+    assert.deepEqual(state.lastRoundReveal.guesses.map(g => [g.hpLost, g.hpRemaining]), [[0, 1000], [500, 0], [0, 0]]);
+    assert.deepEqual(state.roundHistory[1], state.lastRoundReveal);
     const revealAt = state.resultsRevealAt;
     assert.ok(Number.isFinite(Date.parse(revealAt)));
     assert.ok(Date.parse(revealAt) > Date.now());
@@ -164,6 +197,7 @@ test('rematches, credentials, membership changes, atomic results, and history', 
     assert.deepEqual(await s.memberStatistics(room.id), before);
     assert.equal((await s.roomSnapshot(room.id)).resultsRevealAt, revealAt);
     const oldDetails = await s.sessionDetails(room.id, firstId);
+    assert.deepEqual(oldDetails.roundHistory, state.roundHistory);
     await Promise.all([s.transitionRoom(room.id, 'reopen', host.credential, firstId), s.transitionRoom(room.id, 'reopen', host.credential, firstId)]);
     state = await s.roomSnapshot(room.id);
     assert.equal(state.status, 'waiting');
@@ -285,7 +319,7 @@ test('shared starts, early reveals, deadlines, and rematches use database time',
   const { pg, db } = await fresh();
   try {
     const s = services(db);
-    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 2, countdown_seconds: 30 } });
+    const room = await db.multiplayer_rooms.create({ data: { max_health: 1000, max_rounds: 2, countdown_seconds: 30, auto_advance_rounds: true } });
     const host = await s.joinRoom(room.id, 'Host', '');
     await s.joinRoom(room.id, 'Guest', '');
     let state = await s.transitionRoom(room.id, 'start', host.credential, null);
@@ -616,9 +650,10 @@ test('manual rooms hold results until a host advances the expected round', async
     const room = await db.multiplayer_rooms.create({ data: { max_rounds: 2 } });
     const host = await s.joinRoom(room.id, 'Host', '');
     const guest = await s.joinRoom(room.id, 'Guest', '');
-    assert.equal(host.autoAdvanceRounds, true);
+    assert.equal(host.autoAdvanceRounds, false);
     await rejected(s.transitionRoom(room.id, 'settings', guest.credential, null, undefined, { autoAdvanceRounds: false }), 403);
     await rejected(s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: 'false' }), 400);
+    assert.equal((await s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: true })).autoAdvanceRounds, true);
     await s.transitionRoom(room.id, 'settings', host.credential, null, undefined, { autoAdvanceRounds: false });
     let state = await s.transitionRoom(room.id, 'start', host.credential, null);
     const id = state.currentSessionId;
@@ -649,5 +684,207 @@ test('manual rooms hold results until a host advances the expected round', async
     assert.equal(state.awaitingHost, false);
     state = await s.transitionRoom(room.id, 'reopen', host.credential, id);
     assert.equal(state.autoAdvanceRounds, false);
+  } finally { await pg.close(); }
+});
+
+async function fastRoom(db, s, maxRounds = 3) {
+  const room = await db.multiplayer_rooms.create({ data: { max_health: 5000, max_rounds: maxRounds } });
+  const members = [await s.joinRoom(room.id, 'Host', ''), await s.joinRoom(room.id, 'Guest', '')];
+  const snapshot = await s.transitionRoom(room.id, 'start', members[0].credential, null);
+  await openRound(db, snapshot.currentSessionId);
+  const contexts = await Promise.all(members.map(m => s.authorizeGuess(snapshot.currentSessionId,
+    m.credential, snapshot.players.find(p => p.memberId === m.memberId).id)));
+  return { room, members, snapshot, contexts };
+}
+
+test('guess route orders acceptance and results, skips ordinary resolution, and survives broadcast failure', async () => {
+  const { pg, db } = await fresh();
+  const oldFetch = global.fetch;
+  const oldUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const oldKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  try {
+    const pending = [], broadcasts = [];
+    let selections = 0, resolutions = 0;
+    const s = services(db, { after: work => pending.push(work), pickRandomArtifact: async () => {
+      selections++;
+      return { objectId: 1n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'first' };
+    } });
+    const { room, members, snapshot } = await fastRoom(db, s, 1);
+    const resolve = s.GameSession.resolveAuthorizedRound;
+    s.GameSession.resolveAuthorizedRound = (...args) => { resolutions++; return resolve(...args); };
+    process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.test';
+    process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-only';
+    global.fetch = async (_url, options) => {
+      broadcasts.push(JSON.parse(options.body).messages[0].payload);
+      return { ok: broadcasts.length !== 2, status: broadcasts.length === 2 ? 503 : 200 };
+    };
+    async function guess(index) {
+      return s.guessRoute.POST(new Request('http://example.test/guess', { method: 'POST',
+        headers: { Authorization: `Bearer ${members[index].credential}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId: snapshot.players.find(p => p.memberId === members[index].memberId).id,
+          country: 'USA', year: 100, roundNumber: 1 }) }),
+      { params: Promise.resolve({ gameId: snapshot.currentSessionId }) });
+    }
+    const first = await guess(0);
+    assert.equal(first.status, 200);
+    assert.ok(Number(first.headers.get('X-Room-Processing-Ms')) >= 0);
+    assert.equal(pending.length, 1);
+    await pending.shift()();
+    assert.equal(resolutions, 0);
+    assert.equal(selections, 1);
+    const final = await guess(1);
+    assert.equal(final.status, 200);
+    const accepted = await final.json();
+    assert.equal(accepted.roundResolved, false);
+    assert.ok(accepted.players.every(p => p.hasGuessedThisRound));
+    assert.equal(pending.length, 1);
+    await pending.shift()();
+    assert.equal(resolutions, 1);
+    assert.equal(selections, 1);
+    assert.deepEqual(broadcasts.map(b => b.status), ['active', 'active', 'finished']);
+    assert.equal(broadcasts[1].revision, accepted.revision);
+    assert.ok(broadcasts[2].revision > accepted.revision);
+    assert.equal(broadcasts[2].roundHistory.length, 1);
+    assert.equal((await s.roomStatus(room.id)).resultsRevealAt, broadcasts[2].resultsRevealAt);
+    assert.ok(!JSON.stringify(broadcasts).includes(members[0].credential));
+  } finally {
+    global.fetch = oldFetch;
+    if (oldUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL; else process.env.NEXT_PUBLIC_SUPABASE_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY; else process.env.SUPABASE_SERVICE_ROLE_KEY = oldKey;
+    await pg.close();
+  }
+});
+
+test('authorized concurrent guesses identify one final guess and publish committed reserved results before cleanup', async () => {
+  const { pg, db } = await fresh();
+  try {
+    let selections = 0;
+    const s = services(db, { pickRandomArtifact: async () => ({ objectId: BigInt(++selections), iso3: 'USA',
+      beginYear: 0, endYear: 0, imageUrl: `image-${selections}`, title: 'Private reserved title' }) });
+    const { room, snapshot, contexts } = await fastRoom(db, s);
+    await Promise.all([s.prepareNextArtifact(snapshot.currentSessionId, 1), s.prepareNextArtifact(snapshot.currentSessionId, 1)]);
+    assert.equal(selections, 2);
+    // Preparation is durable even if a different instance handles resolution.
+    const otherInstance = services(db, { pickRandomArtifact: () => { throw new Error('reserved resolution must not select'); } });
+    const results = await Promise.all(contexts.map((context, index) => s.GameSession.submitAuthorizedGuess(context,
+      snapshot.players.find(p => p.memberId === context.memberId).id, 'USA', index ? 50 : 100, 1)));
+    assert.equal(results.filter(r => r.allGuessed).length, 1);
+    assert.ok(results.every(r => !r.result.roundResolved));
+    assert.ok(results.every(r => !JSON.stringify(r.snapshot).includes('Private reserved title')));
+    const originalFind = db.multiplayer_games.findUnique;
+    db.multiplayer_games.findUnique = () => { throw new Error('must publish without refreshing'); };
+    let published;
+    const prepared = await otherInstance.GameSession.resolveAuthorizedRound(contexts[0], async (result, committedAt) => {
+      published = result;
+      assert.ok(performance.now() >= committedAt);
+      assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_round_resolution_claims`).length, 1);
+      assert.equal(result.currentRound, 2);
+      assert.deepEqual(result.currentArtifact, { imageUrl: 'image-2' });
+      assert.ok(Date.parse(result.resultsRevealAt) - Date.parse(result.serverTime) <= 1000);
+      assert.ok(Date.parse(result.resultsRevealAt) > Date.parse(result.serverTime));
+      assert.deepEqual((await s.roomSnapshot(room.id)).players, result.players);
+    });
+    db.multiplayer_games.findUnique = originalFind;
+    assert.equal(prepared, published);
+    assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_artifact_reservations`).length, 0);
+    assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_round_resolution_claims`).length, 0);
+    // Another stale final-guess worker cannot damage players or append history again.
+    assert.equal(await otherInstance.GameSession.resolveAuthorizedRound(contexts[1]), null);
+    const current = await s.roomSnapshot(room.id);
+    assert.equal(current.roundHistory.length, 1);
+    assert.equal(current.revision, prepared.revision);
+    await s.prepareNextArtifact(snapshot.currentSessionId, 2);
+    assert.equal(selections, 3);
+  } finally { await pg.close(); }
+});
+
+test('reservation consumption rolls back on resolution failure and retry preserves accepted guesses', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const { snapshot, contexts } = await fastRoom(db, s);
+    await s.prepareNextArtifact(snapshot.currentSessionId, 1);
+    for (const context of contexts) await s.GameSession.submitAuthorizedGuess(context,
+      snapshot.players.find(p => p.memberId === context.memberId).id, 'USA', 100, 1);
+    const transaction = db.$transaction;
+    db.$transaction = work => transaction(async tx => {
+      const update = tx.multiplayer_games.update;
+      tx.multiplayer_games.update = args => {
+        if (args.data.current_round === 2) throw new Error('resolution commit failed');
+        return update(args);
+      };
+      return work(tx);
+    });
+    await assert.rejects(s.GameSession.resolveAuthorizedRound(contexts[0]), /resolution commit failed/);
+    db.$transaction = transaction;
+    assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_artifact_reservations`).length, 1);
+    assert.equal(await db.multiplayer_guesses.count({ where: { game_id: snapshot.currentSessionId } }), 2);
+    const resolved = await s.GameSession.resolveAuthorizedRound(contexts[0]);
+    assert.equal(resolved.currentRound, 2);
+    assert.equal(resolved.roundHistory.length, 1);
+    assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_artifact_reservations`).length, 0);
+  } finally { await pg.close(); }
+});
+
+test('failed or slow preparation uses claimed fallback and stale preparation cannot overwrite the next round', async () => {
+  const { pg, db } = await fresh();
+  try {
+    let select = async () => ({ objectId: 1n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'first' });
+    const s = services(db, { pickRandomArtifact: () => select() });
+    const { room, snapshot, contexts } = await fastRoom(db, s);
+    select = async () => { throw new Error('preparation unavailable'); };
+    await s.prepareNextArtifact(snapshot.currentSessionId, 1);
+    assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_artifact_reservations`).length, 0);
+    let release, signal;
+    const selecting = new Promise(resolve => { signal = resolve; });
+    select = () => { signal(); return new Promise(resolve => { release = () => resolve({ objectId: 2n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'slow' }); }); };
+    const preparation = s.prepareNextArtifact(snapshot.currentSessionId, 1);
+    await selecting;
+    for (const context of contexts) await s.GameSession.submitAuthorizedGuess(context,
+      snapshot.players.find(p => p.memberId === context.memberId).id, 'USA', 100, 1);
+    select = async () => ({ objectId: 3n, iso3: 'USA', beginYear: 0, endYear: 0, imageUrl: 'fallback' });
+    const results = await s.GameSession.resolveAuthorizedRound(contexts[0]);
+    assert.equal(results.currentArtifact.imageUrl, 'fallback');
+    release();
+    await preparation;
+    assert.equal((await db.$queryRaw`SELECT * FROM multiplayer_artifact_reservations`).length, 0);
+    assert.equal((await s.roomSnapshot(room.id)).roundHistory.length, 1);
+    await rejected(s.GameSession.submitAuthorizedGuess(contexts[0], snapshot.players[0].id, 'USA', 100, 1), 409);
+  } finally { await pg.close(); }
+});
+
+test('late authorized guesses stay rejected and deadline recovery publishes once', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const { snapshot, contexts } = await fastRoom(db, s, 1);
+    await db.multiplayer_games.update({ where: { id: snapshot.currentSessionId }, data: { round_ends_at: new Date(0) } });
+    await assert.rejects(s.GameSession.submitAuthorizedGuess(contexts[0], snapshot.players[0].id, 'USA', 100, 1),
+      error => error.statusCode === 409 && error.stateChanged);
+    assert.equal(await db.multiplayer_guesses.count({ where: { game_id: snapshot.currentSessionId } }), 0);
+    let broadcasts = 0;
+    const results = await s.GameSession.resolveAuthorizedRound(contexts[0], async () => { broadcasts++; });
+    assert.equal(results.status, 'finished');
+    assert.ok(results.lastRoundReveal.guesses.every(g => g.totalScore === 0 && g.countryGuessed === null));
+    assert.equal(await s.GameSession.resolveAuthorizedRound(contexts[1], async () => { broadcasts++; }), null);
+    assert.equal(broadcasts, 1);
+  } finally { await pg.close(); }
+});
+
+test('cached guess authorization rechecks ownership, duplicates, elimination, and active membership under lock', async () => {
+  const { pg, db } = await fresh();
+  try {
+    const s = services(db);
+    const { snapshot, contexts } = await fastRoom(db, s);
+    const ids = contexts.map(c => snapshot.players.find(p => p.memberId === c.memberId).id);
+    await rejected(s.GameSession.submitAuthorizedGuess(contexts[0], ids[1], 'USA', 100, 1), 403);
+    await s.GameSession.submitAuthorizedGuess(contexts[0], ids[0], 'USA', 100, 1);
+    await rejected(s.GameSession.submitAuthorizedGuess(contexts[0], ids[0], 'USA', 100, 1), 409);
+    await db.multiplayer_players.update({ where: { id: ids[1] }, data: { is_eliminated: true } });
+    await rejected(s.GameSession.submitAuthorizedGuess(contexts[1], ids[1], 'USA', 100, 1), 409);
+    await db.multiplayer_players.update({ where: { id: ids[1] }, data: { is_eliminated: false } });
+    await db.multiplayer_room_members.update({ where: { id: contexts[1].memberId }, data: { left_at: new Date() } });
+    await rejected(s.GameSession.submitAuthorizedGuess(contexts[1], ids[1], 'USA', 100, 1), 403);
+    assert.equal(await db.multiplayer_guesses.count({ where: { game_id: snapshot.currentSessionId } }), 1);
   } finally { await pg.close(); }
 });

@@ -6,14 +6,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import ReactFlagsSelect from "react-flags-select";
 import countries from 'i18n-iso-countries';
 import enLocale from 'i18n-iso-countries/langs/en.json';
-import HistorySlider from '../../../HistorySlider/HistorySlider.jsx';
 import { supabase } from '../../../lib/supabaseClient';
-import { estimateServerClockOffset, getRecoveryPollInterval, getRoomPhase, shouldApplyRoomSnapshot } from './snapshotSync.js';
+import { estimateServerClockOffset, getFrozenRoundTimer, getRecoveryPollInterval, getRoomPhase, shouldApplyRoomSnapshot } from './snapshotSync.js';
 import '../battleRoyale.css';
 import RoundResultCard from '../RoundResultCard';
 import RoomHistory from '../RoomHistory';
 import AutoAdvanceSwitch from '../AutoAdvanceSwitch';
-import BattleRoyaleHelp from '../BattleRoyaleHelp';
+import RoundHistoryDialog from '../RoundHistoryDialog';
 
 countries.registerLocale(enLocale);
 const omittedCountries = ['AS', 'IO', 'CW', 'GG', 'GU', 'IM', 'JE', 'PS', 'SX', 'VI', 'AX', 'XK'];
@@ -29,9 +28,11 @@ const formatYear = (y) => {
 export default function BattleRoyaleRoom() {
   const { gameId } = useParams();
   const router = useRouter();
+  const lastVisibleResultsRef = useRef(null);
   const roomIdRef = useRef(gameId);
   roomIdRef.current = gameId;
   const [gameState, setGameState] = useState(null);
+  const [frozenRoundTimer, setFrozenRoundTimer] = useState(null);
   const [identity, setIdentity] = useState(null);
   const memberId = identity?.memberId;
   const isMember = !!gameState?.members?.some(m => m.id === memberId);
@@ -63,7 +64,12 @@ export default function BattleRoyaleRoom() {
   const bestClockRoundTripRef = useRef(Infinity);
   const phase = getRoomPhase(gameState, Date.now() + serverClockOffsetRef.current);
   const { revealPending, timeRemaining } = phase;
-  const intermission = { ...phase, phase: phase.phase === 'playing' ? 'none' : phase.phase };
+  const hasFrozenRoundTimer = frozenRoundTimer != null && frozenRoundTimer.roomId === gameId
+    && frozenRoundTimer.sessionId === gameState?.currentSessionId && frozenRoundTimer.round === gameState?.currentRound;
+  const displayedTimeRemaining = hasFrozenRoundTimer ? frozenRoundTimer.seconds : timeRemaining;
+  // Keep the loading view visible if resolution outlasts the original deadline.
+  const isLoadingResults = hasFrozenRoundTimer && timeRemaining != null;
+  const intermission = { ...phase, phase: phase.phase === 'playing' || isLoadingResults ? 'none' : phase.phase };
 
   const [channelStatus, setChannelStatus] = useState('CONNECTING');
   const [copied, setCopied] = useState(false);
@@ -76,6 +82,7 @@ export default function BattleRoyaleRoom() {
     bestClockRoundTripRef.current = Infinity;
     serverClockOffsetRef.current = 0;
     setGameState(null);
+    setFrozenRoundTimer(null);
     setStatusError(null);
     try {
       const saved = JSON.parse(localStorage.getItem(`br_member_${gameId}`) ?? 'null');
@@ -110,6 +117,8 @@ export default function BattleRoyaleRoom() {
       serverClockOffsetRef.current = estimateServerClockOffset(data.serverTime, requestedAt, receivedAt, processingMs);
     }
     setStatusError(null);
+    const serverNow = Date.now() + serverClockOffsetRef.current;
+    setFrozenRoundTimer(previous => getFrozenRoundTimer(previous, data, serverNow));
     setGameState(data);
     const pending = pendingGuessRef.current;
     if (pending && data.currentSessionId === pending.sessionId && data.currentRound === pending.round
@@ -179,6 +188,17 @@ export default function BattleRoyaleRoom() {
     debounceRef.current = setTimeout(fetchStatus, 50);
   }, [fetchStatus]);
 
+  useEffect(() => {
+    if (!gameState?.lastRoundReveal || revealPending || !['results', 'finished'].includes(phase.phase)) return;
+    const key = `${gameState.currentSessionId}:${gameState.lastRoundReveal.round}`;
+    if (lastVisibleResultsRef.current === key) return;
+    lastVisibleResultsRef.current = key;
+    console.debug('[multiplayer/visible]', JSON.stringify({ roomId: gameId,
+      sessionId: gameState.currentSessionId, round: gameState.lastRoundReveal.round,
+      revision: gameState.revision, visibleAt: new Date().toISOString(), resultsRevealAt: gameState.resultsRevealAt,
+      revealLatenessMs: Date.now() + serverClockOffsetRef.current - Date.parse(gameState.resultsRevealAt) }));
+  }, [gameId, gameState, revealPending, phase.phase]);
+
   // Supabase realtime channel — broadcast (fast path) + postgres_changes (fallback)
   useEffect(() => {
     void fetchStatus();
@@ -188,6 +208,11 @@ export default function BattleRoyaleRoom() {
       // Broadcast: full game state delivered by the server directly after each mutation,
       // no HTTP round-trip needed on the client side.
       .on('broadcast', { event: 'room_update' }, ({ payload }) => {
+        console.debug('[multiplayer/receipt]', JSON.stringify({ roomId: gameId, sessionId: payload.currentSessionId,
+          revision: payload.revision, receivedAt: new Date().toISOString(),
+          resultsRevealAt: payload.resultsRevealAt, serverTime: payload.serverTime,
+          snapshotAgeMs: Date.now() + serverClockOffsetRef.current - Date.parse(payload.serverTime),
+          revealInMs: payload.resultsRevealAt ? Date.parse(payload.resultsRevealAt) - Date.now() - serverClockOffsetRef.current : null }));
         applySnapshot(payload);
       })
       // postgres_changes: safety fallback for any broadcast misses
@@ -322,7 +347,7 @@ export default function BattleRoyaleRoom() {
       if (res.ok) {
         const data = await res.json();
         if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
-        applySnapshot(data, requestedAt, Date.now());
+        applySnapshot(data, requestedAt, Date.now(), Number(res.headers.get('X-Room-Processing-Ms') ?? 0));
       } else {
         const data = await res.json().catch(() => null);
         if (pendingGuessRef.current !== pending || submissionScopeRef.current !== pending.scope) return;
@@ -370,7 +395,7 @@ export default function BattleRoyaleRoom() {
               {gameId}
             </button>
             <div className="br-invite-link">
-              <input className="br-input" readOnly value={url} onClick={e => e.target.select()} />
+              <input className="br-input" aria-label="Invitation link" readOnly value={url} onClick={e => e.target.select()} />
               <button className="br-btn br-btn-secondary" onClick={handleCopyLink}>
                 {copied ? 'COPIED!' : 'COPY LINK'}
               </button>
@@ -378,22 +403,24 @@ export default function BattleRoyaleRoom() {
           </div>
         </div>
 
-        <div className="br-players-list">
-          <h4>Players ({gameState.players.length})</h4>
-          <ul>
-            {gameState.players.map((p, i) => (
-              <li key={p.id} className="br-player-row">
-                <span className="br-player-num">{i + 1}</span>
-                <span className="br-player-name">{p.name}</span>
-                <span className="br-player-tags">
-                  {p.id === playerId && <span className="br-you-tag">you</span>}
-                  {p.id === gameState.hostId && <span className="br-host-tag">👑 host</span>}
-                  {isHost && p.memberId !== memberId && <button className="br-history-button" disabled={isStarting} onClick={() => roomAction('remove', p.memberId)}>Remove</button>}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
+        <details className="br-disclosure br-players-list" key={`${gameState.currentSessionId}:waiting`}>
+          <summary>Players ({gameState.players.length})</summary>
+          <div className="br-list-scroll" tabIndex={0} role="region" aria-label="Players">
+            <ul>
+              {gameState.players.map((p, i) => (
+                <li key={p.id} className="br-player-row">
+                  <span className="br-player-num">{i + 1}</span>
+                  <span className="br-player-name">{p.name}</span>
+                  <span className="br-player-tags">
+                    {p.id === playerId && <span className="br-you-tag">you</span>}
+                    {p.id === gameState.hostId && <span className="br-host-tag">👑 host</span>}
+                    {isHost && p.memberId !== memberId && <button className="br-history-button" disabled={isStarting} onClick={() => roomAction('remove', p.memberId)}>Remove</button>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </details>
 
         {typeof gameState.autoAdvanceRounds === 'boolean' && <div className="br-input-group">
           <AutoAdvanceSwitch checked={gameState.autoAdvanceRounds} disabled={!isHost || isStarting}
@@ -433,6 +460,7 @@ export default function BattleRoyaleRoom() {
         <div className="br-top-bar">
           <div className="br-round-info">Round {gameState.currentRound} / {gameState.maxRounds}</div>
           <div className="br-guess-count">{guessedCount} / {activePlayers.length} guessed</div>
+          <div className="br-player-status">{me ? `${me.health.toLocaleString()} HP${me.isEliminated ? ' · Eliminated' : ''}` : 'Spectating'} · {activePlayers.length} remaining</div>
           <div className="br-top-bar-actions">
             <button className="br-history-button" onClick={() => setIsHistoryOpen(true)}>History</button>
             {intermission.phase === 'results' && gameState.lastRoundReveal && gameState.awaitingHost && isHost && (
@@ -441,8 +469,8 @@ export default function BattleRoyaleRoom() {
               </button>
             )}
           </div>
-          {!isIntermission && timeRemaining !== null && (
-            <div className={`br-timer ${timeRemaining < 10 ? 'urgent' : ''}`}>{timeRemaining}s</div>
+          {!isIntermission && displayedTimeRemaining !== null && (
+            <div className={`br-timer ${displayedTimeRemaining < 10 ? 'urgent' : ''}`}>{displayedTimeRemaining}s</div>
           )}
         </div>
 
@@ -455,28 +483,6 @@ export default function BattleRoyaleRoom() {
               )}
             </div>
           ) : <>
-          <div className="br-health-bars">
-            <h3 className="br-health-title">Players</h3>
-            {gameState.players.map(p => {
-              const hpPct = Math.max(0, p.health / (gameState.maxHealth || 25000) * 100);
-              return (
-                <div key={p.id} className={`br-health-bar ${p.isEliminated ? 'eliminated' : ''}`}>
-                  <div className="br-hb-name">
-                    <span className="br-hb-player-name" title={p.name}>{p.name}</span>
-                    {p.id === playerId && <span className="br-you-tag">you</span>}
-                    {p.hasGuessedThisRound && !p.isEliminated && <span className="br-guessed-tag">✓</span>}
-                  </div>
-                  <div className="br-hb-fill-bg">
-                    <div className="br-hb-fill" style={{ width: `${hpPct}%`, '--hp-pct': hpPct }} />
-                  </div>
-                  <div className="br-hb-hp">
-                    {p.isEliminated ? '☠ out' : `${p.health.toLocaleString()} HP`}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           <div className="br-artifact-pane">
             {gameState.currentArtifact && (
               <div className="br-artifact-container">
@@ -485,15 +491,40 @@ export default function BattleRoyaleRoom() {
             )}
           </div>
 
+          <details className="br-disclosure br-round-players" key={`${gameState.currentSessionId}:${gameState.currentRound}:${intermission.phase}`}>
+            <summary>Players ({gameState.players.length})</summary>
+            <div className="br-list-scroll" tabIndex={0} role="region" aria-label="Players">
+              <div className="br-health-bars">
+                {gameState.players.map(p => {
+                  const hpPct = Math.max(0, p.health / (gameState.maxHealth || 25000) * 100);
+                  return (
+                    <div key={p.id} className={`br-health-bar ${p.isEliminated ? 'eliminated' : ''}`}>
+                      <div className="br-hb-name">
+                        <span className="br-hb-player-name" title={p.name}>{p.name}</span>
+                        {p.id === playerId && <span className="br-you-tag">you</span>}
+                        {p.hasGuessedThisRound && !p.isEliminated && <span className="br-guessed-tag">✓</span>}
+                      </div>
+                      <div className="br-hb-fill-bg">
+                        <div className="br-hb-fill" style={{ width: `${hpPct}%`, '--hp-pct': hpPct }} />
+                      </div>
+                      <div className="br-hb-hp">
+                        {p.isEliminated ? '☠ out' : `${p.health.toLocaleString()} HP`}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </details>
           <div className="br-controls-pane" inert={isIntermission}>
               {!me ? <div className="br-waiting">Spectating this session</div> : me?.isEliminated ? (
               <div className="br-eliminated">You were eliminated. Spectating…</div>
-            ) : !isIntermission && timeRemaining === 0 ? (
+            ) : !isIntermission && displayedTimeRemaining === 0 ? (
               <div className="br-waiting">Time’s up — loading results…</div>
             ) : me?.hasGuessedThisRound || pendingGuess?.scope === submissionScope ? (
               <div className="br-waiting">{guessedCount === activePlayers.length ? 'Loading results…' : 'Guess submitted — waiting for others…'}</div>
             ) : (
-              <fieldset className="br-guess-panel" style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+              <fieldset className="br-guess-panel">
                 <p className="br-guess-prompt">Where is this artifact from?</p>
                 <ReactFlagsSelect
                   selected={selectedCountry}
@@ -509,10 +540,15 @@ export default function BattleRoyaleRoom() {
                     type="number"
                     value={yearInput}
                     onChange={handleYearInputChange}
+                    aria-label="Year (negative for BCE)"
+                    min="-3000" max={currentYear}
                     className="br-input br-year-input"
                   />
                 </div>
-                <HistorySlider value={selectedYear} onYearChange={handleSliderChange} />
+                <label className="br-year-slider">Artifact year
+                  <input aria-label="Artifact year" type="range" min="-3000" max={currentYear} value={selectedYear} onChange={event => handleSliderChange(Number(event.target.value))} />
+                  <span><span>3000 BCE</span><span>{currentYear} CE</span></span>
+                </label>
                 <button
                   className="br-btn br-btn-primary"
                   onClick={submitGuess}
@@ -548,10 +584,12 @@ export default function BattleRoyaleRoom() {
             <button type="button" aria-pressed={finishedView === 'round'} onClick={() => setFinishedView('round')}>Final round</button>
           </div>
         )}
-        <div className="br-finished-summary">
+        <div className="br-finished-announcement">
           <h2 className="br-finished-title">GAME OVER</h2>
           <h1 className="br-winner-name">{winners.length ? `${winners.map(p => p.name).join(' & ')} ${winners.length > 1 ? 'are joint winners!' : 'Wins!'}` : 'Placements unavailable'}</h1>
-          <div className="br-leaderboard">
+        </div>
+        <div className="br-finished-summary">
+          <div className="br-leaderboard" tabIndex={0} aria-label="Final standings">
             {sorted.map(p => (
               <div key={p.id} className={`br-lb-row ${p.finalPlacement === 1 ? 'winner' : ''}`}>
                 <span className="br-lb-rank">{p.finalPlacement == null ? '—' : MEDALS[p.finalPlacement - 1] ?? `#${p.finalPlacement}`}</span>
@@ -563,20 +601,20 @@ export default function BattleRoyaleRoom() {
               </div>
             ))}
           </div>
-          <div className="br-finished-actions">
-            <button className="br-btn br-btn-secondary" onClick={() => router.push('/')}>
-              HOME
-            </button>
-            {isHost ? <button className="br-btn br-btn-primary" disabled={isStarting} onClick={() => roomAction('reopen')}>
-              Return to Lobby
-            </button> : <p className="br-waiting-msg">Waiting for the host to return to the lobby…</p>}
-          </div>
         </div>
         {gameState.lastRoundReveal && (
           <div className="br-finished-result">
             <RoundResultCard round={gameState.lastRoundReveal} playerId={playerId} />
           </div>
         )}
+        <div className="br-finished-actions">
+          <button className="br-btn br-btn-secondary" onClick={() => router.push('/')}>
+            HOME
+          </button>
+          {isHost ? <button className="br-btn br-btn-primary" disabled={isStarting} onClick={() => roomAction('reopen')}>
+            Return to Lobby
+          </button> : <p className="br-waiting-msg">Waiting for the host to return to the lobby…</p>}
+        </div>
       </div>
     );
   };
@@ -586,7 +624,6 @@ export default function BattleRoyaleRoom() {
   if (!gameState) {
     return (
       <div className="br-page br-page-with-help">
-        <BattleRoyaleHelp />
         <div className="br-loading">{statusError ?? startError ?? 'Loading Battle Royale…'}</div>
       </div>
     );
@@ -595,7 +632,6 @@ export default function BattleRoyaleRoom() {
   if (!isMember && gameState.status === 'waiting') {
     return (
       <div className="br-page br-page-with-help">
-        <BattleRoyaleHelp />
         <div className="br-card br-join-card">
           <h2>Join Room</h2>
           {statusError && <p className="br-error" role="status">{statusError}</p>}
@@ -604,6 +640,7 @@ export default function BattleRoyaleRoom() {
           <form onSubmit={handleJoin} className="br-join-form">
             <input
               type="text"
+              aria-label="Your nickname"
               placeholder="Your Nickname"
               value={playerName}
               onChange={(e) => setPlayerName(e.target.value)}
@@ -623,11 +660,10 @@ export default function BattleRoyaleRoom() {
 
   return (
     <div className={`br-page br-page-with-help${gameState.status === 'active' ? ' br-active-page' : gameState.status === 'finished' ? ' br-finished-page' : ''}`}>
-      <BattleRoyaleHelp />
       {statusError && <p className="br-error" role="status">{statusError}</p>}
       {startError && <p className="br-error" role="alert">{startError}</p>}
       {gameState.status === 'waiting'  && renderLobby()}
-      {gameState.status === 'active' && (phase.phase === 'syncing'
+      {gameState.status === 'active' && (phase.phase === 'syncing' && !isLoadingResults
         ? <div className="br-waiting" role="status">Round complete — syncing results…</div>
         : renderActive())}
       {gameState.status === 'finished' && (revealPending
@@ -635,22 +671,7 @@ export default function BattleRoyaleRoom() {
         : renderFinished())}
       {gameState.status === 'waiting' && isMember && <button className="br-btn br-btn-leave" disabled={isStarting} onClick={() => roomAction('leave')}>Leave Room</button>}
       {!revealPending && <RoomHistory key={gameId} roomId={gameId} revision={gameState.revision} onOpenRoundHistory={gameState.status === 'finished' ? () => setIsHistoryOpen(true) : undefined} />}
-      {isHistoryOpen && !revealPending && (
-        <div className="br-history-overlay" role="dialog" aria-modal="true" aria-label="Round history">
-          <div className="br-history-panel">
-            <div className="br-history-header">
-              <h2>Round History</h2>
-              <button className="br-history-close" onClick={() => setIsHistoryOpen(false)} aria-label="Close round history">×</button>
-            </div>
-            <div className="br-history-list">
-              {[...(gameState.roundHistory ?? [])].reverse().map(round => (
-                <RoundResultCard key={round.round} round={round} playerId={playerId} history />
-              ))}
-              {(gameState.roundHistory ?? []).length === 0 && <p className="br-history-empty">No completed rounds yet.</p>}
-            </div>
-          </div>
-        </div>
-      )}
+      {isHistoryOpen && !revealPending && <RoundHistoryDialog rounds={gameState.roundHistory ?? []} playerId={playerId} onClose={() => setIsHistoryOpen(false)} />}
     </div>
   );
 }

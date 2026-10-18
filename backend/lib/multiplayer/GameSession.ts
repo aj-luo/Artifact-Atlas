@@ -1,4 +1,6 @@
 import { rankPlayers } from './placements';
+import { readRoomSnapshot, type RoomSnapshot } from './roomSnapshot';
+import { reservedArtifact } from './artifactReservation';
 import { randomUUID } from 'node:crypto';
 import { db } from '@/lib/db';
 import { pickRandomArtifact, type SelectedArtifact } from '@/lib/artifactSelector';
@@ -28,6 +30,7 @@ export interface RoundGuessResult {
   yearsAway: number | null;
   totalScore: number;
   hpLost: number;
+  hpRemaining?: number;
   isEliminated: boolean;
 }
 
@@ -69,7 +72,10 @@ export interface GuessResult {
 
 export interface FastGuessResult {
   result: GuessResult;
-  timing: { scoringMs: number; transactionMs: number };
+  snapshot: RoomSnapshot;
+  allGuessed: boolean;
+  committedAt: number;
+  timing: { scoringMs: number; transactionMs: number; poolWaitMs: number; lockWaitMs: number; snapshotMs: number };
 }
 
 export class GameSessionError extends Error {
@@ -87,6 +93,8 @@ type Transaction = Prisma.TransactionClient;
 
 type ResolutionTiming = {
   selectionMs: number;
+  poolWaitMs: number;
+  snapshotMs: number;
   lockWaitMs: number;
   readsMs: number;
   missingGuessesMs: number;
@@ -96,7 +104,7 @@ type ResolutionTiming = {
 };
 
 function resolutionTiming(): ResolutionTiming {
-  return { selectionMs: 0, lockWaitMs: 0, readsMs: 0, missingGuessesMs: 0,
+  return { selectionMs: 0, poolWaitMs: 0, snapshotMs: 0, lockWaitMs: 0, readsMs: 0, missingGuessesMs: 0,
     playerUpdatesMs: 0, placementMs: 0, finalGameUpdateMs: 0 };
 }
 
@@ -116,7 +124,10 @@ const isTransactionTimeout = (error: unknown) => typeof error === 'object' && er
 async function claimRound(game: multiplayer_games, token: string): Promise<boolean> {
   const inserted = await db.$queryRaw<Array<{ claim_token: string }>>`
     INSERT INTO multiplayer_round_resolution_claims (session_id, round_number, claim_token, expires_at)
-    VALUES (${game.id}::uuid, ${game.current_round}, ${token}::uuid, clock_timestamp() + interval '30 seconds')
+    SELECT id, current_round, ${token}::uuid, clock_timestamp() + interval '30 seconds'
+    FROM multiplayer_games WHERE id = ${game.id}::uuid AND current_round = ${game.current_round}
+      AND status = 'active' AND NOT awaiting_host
+      AND object_id IS NOT DISTINCT FROM ${game.object_id}::bigint
     ON CONFLICT (session_id, round_number) DO NOTHING
     RETURNING claim_token
   `;
@@ -125,6 +136,8 @@ async function claimRound(game: multiplayer_games, token: string): Promise<boole
       SELECT session_id, round_number FROM multiplayer_round_resolution_claims
       WHERE session_id = ${game.id}::uuid AND round_number = ${game.current_round}
         AND expires_at < clock_timestamp()
+        AND EXISTS (SELECT 1 FROM multiplayer_games g WHERE g.id = ${game.id}::uuid
+          AND g.current_round = ${game.current_round} AND g.status = 'active' AND NOT g.awaiting_host)
       FOR UPDATE SKIP LOCKED
     )
     UPDATE multiplayer_round_resolution_claims AS claim
@@ -228,13 +241,15 @@ export class GameSession {
       sourceGame.artifact_begin_year, sourceGame.artifact_end_year);
     const scoringMs = performance.now() - scoreStarted;
     const transactionStarted = performance.now();
-    const result = await db.$transaction(async (tx) => {
+    let poolWaitMs = 0;
+    let lockWaitMs = 0;
+    let snapshotMs = 0;
+    const committed = await db.$transaction(async (tx) => {
+      poolWaitMs = performance.now() - transactionStarted;
+      const lockStarted = performance.now();
       const game = await lockGame(tx, sourceGame.id);
+      lockWaitMs = performance.now() - lockStarted;
       if (!game) throw new GameSessionError('Game not found', 404);
-      const member = await tx.multiplayer_room_members.findFirst({
-        where: { id: context.memberId, room_id: context.roomId, left_at: null },
-      });
-      if (!member) throw new GameSessionError('Room membership is no longer active', 403);
       if (game.room_id !== context.roomId || game.current_round !== expectedRound || game.status !== 'active') {
         throw new GameSessionError('Session is no longer active or the round changed', 409);
       }
@@ -246,13 +261,21 @@ export class GameSession {
       const initialized = await initializeRoundWindow(tx, game, now);
       if (initialized.round_starts_at && now < initialized.round_starts_at) throw new GameSessionError('The next round has not started yet', 409);
       if (initialized.round_ends_at && now >= initialized.round_ends_at) throw new GameSessionError('Round has ended; this guess was not accepted', 409, true);
-      const player = await tx.multiplayer_players.findFirst({ where: { id: playerId, game_id: game.id, member_id: context.memberId } });
-      if (!player) throw new GameSessionError('Player does not belong to this member', 403);
-      if (player.is_eliminated) throw new GameSessionError('Player is eliminated', 409);
-      const alreadyGuessed = await tx.multiplayer_guesses.findUnique({
-        where: { game_id_player_id_round_number: { game_id: game.id, player_id: playerId, round_number: game.current_round } },
-      });
-      if (alreadyGuessed) throw new GameSessionError('Already submitted a guess this round', 409);
+      const validations = await tx.$queryRaw<Array<{ member_active: boolean; player_id: string | null; is_eliminated: boolean | null; already_guessed: boolean; session_active: boolean }>>`
+        SELECT m.left_at IS NULL AS member_active, p.id AS player_id, p.is_eliminated,
+          r.current_session_id = ${game.id}::uuid AND r.status = 'active' AS session_active,
+          EXISTS (SELECT 1 FROM multiplayer_guesses q WHERE q.game_id = ${game.id}::uuid
+            AND q.player_id = ${playerId}::uuid AND q.round_number = ${game.current_round}) AS already_guessed
+        FROM multiplayer_room_members m JOIN multiplayer_rooms r ON r.id = m.room_id
+        LEFT JOIN multiplayer_players p ON p.member_id = m.id AND p.game_id = ${game.id}::uuid AND p.id = ${playerId}::uuid
+        WHERE m.id = ${context.memberId}::uuid AND m.room_id = ${context.roomId}::uuid
+      `;
+      const validation = validations[0];
+      if (!validation?.member_active) throw new GameSessionError('Room membership is no longer active', 403);
+      if (!validation.session_active) throw new GameSessionError('Session is no longer active', 409);
+      if (!validation.player_id) throw new GameSessionError('Player does not belong to this member', 403);
+      if (validation.is_eliminated) throw new GameSessionError('Player is eliminated', 409);
+      if (validation.already_guessed) throw new GameSessionError('Already submitted a guess this round', 409);
       await tx.multiplayer_guesses.create({ data: {
         game_id: game.id, player_id: playerId, round_number: game.current_round,
         country_guessed: normalizedCountry, year_guessed: year,
@@ -261,9 +284,14 @@ export class GameSession {
         total_score: score.totalScore, submitted_at: now,
       } });
       await tx.multiplayer_games.update({ where: { id: game.id }, data: { revision: { increment: 1 } } });
-      return { score, roundResolved: false };
+      const snapshotStarted = performance.now();
+      const snapshot = await readRoomSnapshot(context.roomId, tx);
+      snapshotMs = performance.now() - snapshotStarted;
+      const allGuessed = snapshot.players.filter(p => !p.isEliminated).every(p => p.hasGuessedThisRound);
+      return { result: { score, roundResolved: false }, snapshot, allGuessed };
     });
-    return { result, timing: { scoringMs, transactionMs: performance.now() - transactionStarted } };
+    return { ...committed, committedAt: performance.now(),
+      timing: { scoringMs, poolWaitMs, lockWaitMs, snapshotMs, transactionMs: performance.now() - transactionStarted } };
   }
 
   async submitGuess(playerId: string, country: string, year: number, expectedRound: number, refresh = true): Promise<GuessResult> {
@@ -358,7 +386,23 @@ export class GameSession {
     return { score: result.score, roundResolved: result.roundResolved };
   }
 
-  async resolveRoundIfNeeded(): Promise<boolean> {
+  static async resolveAuthorizedRound(
+    context: { game: multiplayer_games },
+    onCommitted?: (snapshot: RoomSnapshot, committedAt: number) => Promise<void>,
+  ): Promise<RoomSnapshot | null> {
+    const session = new GameSession(context.game, [], [], new Date());
+    let prepared: RoomSnapshot | null = null;
+    await session.resolveRoundIfNeeded({ force: true, refresh: false, onCommitted: async (snapshot, committedAt) => {
+      prepared = snapshot;
+      await onCommitted?.(snapshot, committedAt);
+    } });
+    return prepared;
+  }
+
+  async resolveRoundIfNeeded(options: {
+    force?: boolean; refresh?: boolean;
+    onCommitted?: (snapshot: RoomSnapshot, committedAt: number) => Promise<void>;
+  } = {}): Promise<boolean> {
     if (this.game.status !== 'active' || this.game.awaiting_host) return false;
     const resolveStarted = performance.now();
     const timing = resolutionTiming();
@@ -382,21 +426,23 @@ export class GameSession {
       }
       await this.refresh();
     }
-    const timerExpired = this.game.round_ends_at !== null && (await databaseNow(db)) >= this.game.round_ends_at;
+    const timerExpired = !options.force && this.game.round_ends_at !== null && (await databaseNow(db)) >= this.game.round_ends_at;
     const allGuessed = this.players.filter((player) => !player.is_eliminated)
       .every((player) => this.roundGuesses.some((guess) => guess.player_id === player.id));
-    if (!timerExpired && !allGuessed) return initialized;
+    if (!options.force && !timerExpired && !allGuessed) return initialized;
 
-    const needsArtifact = this.game.current_round < this.game.max_rounds
-      && this.players.filter(player => !player.is_eliminated).length > 1;
+    const needsArtifact = this.game.current_round < this.game.max_rounds;
     const claimedGame = this.game;
     const token = randomUUID();
     if (!await claimRound(claimedGame, token)) return initialized;
     try {
       const selectionStarted = performance.now();
-      const nextArtifact = needsArtifact ? await pickRandomArtifact() : null;
+      const nextArtifact = needsArtifact
+        ? await reservedArtifact(claimedGame.id, claimedGame.current_round + 1) ?? await pickRandomArtifact() : null;
       timing.selectionMs = performance.now() - selectionStarted;
+      const transactionStarted = performance.now();
       const resolved = await db.$transaction(async (tx) => {
+        timing.poolWaitMs = performance.now() - transactionStarted;
         const lockStarted = performance.now();
         const game = await lockGame(tx, claimedGame.id);
         timing.lockWaitMs = performance.now() - lockStarted;
@@ -409,11 +455,18 @@ export class GameSession {
           FOR UPDATE
         `;
         if (claim[0]?.claim_token !== token) return false;
-        return this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact, timing);
+        const changed = await this.resolveLocked(tx, game, await databaseNow(tx), nextArtifact, timing);
+        if (!changed || !game.room_id) return changed;
+        const snapshotStarted = performance.now();
+        const snapshot = await readRoomSnapshot(game.room_id, tx);
+        timing.snapshotMs = performance.now() - snapshotStarted;
+        return snapshot;
       }, RESOLUTION_TRANSACTION_OPTIONS);
-      if (resolved) await this.refresh();
-      reportResolution(timing, resolveStarted, resolved, claimedGame);
-      return resolved || initialized;
+      const committedAt = performance.now();
+      if (resolved && typeof resolved === 'object') await options.onCommitted?.(resolved, committedAt);
+      if (resolved && options.refresh !== false) await this.refresh();
+      reportResolution(timing, resolveStarted, Boolean(resolved), claimedGame);
+      return Boolean(resolved) || initialized;
     } catch (error) {
       if (!isTransactionTimeout(error)) throw error;
       console.error('[multiplayer/resolve:transaction-timeout]', JSON.stringify({
@@ -451,11 +504,10 @@ export class GameSession {
     const allGuessed = activePlayers.every((player) => guesses.some((guess) => guess.player_id === player.id));
     if (!timerExpired && !allGuessed) return false;
 
-    // A concurrent guess can make a request that looked non-final become final
-    // after it acquires the lock. Commit that guess promptly; the game-row
-    // invalidation/status recovery will resolve it with a prefetched artifact.
-    // Return before applying any damage so resolution stays all-or-nothing.
+    // Consume preparation under the session lock. A missing artifact leaves the
+    // round untouched so a claimed on-demand selection can recover it.
     const definitelyGameOver = activePlayers.length <= 1 || game.current_round >= game.max_rounds;
+    if (!definitelyGameOver) nextArtifact = await reservedArtifact(game.id, game.current_round + 1, tx, true) ?? nextArtifact;
     if (!definitelyGameOver && !nextArtifact) return false;
 
     const maxScore = guesses.length ? Math.max(...guesses.map((guess) => guess.total_score)) : 0;
@@ -512,6 +564,7 @@ export class GameSession {
           yearsAway: guess?.years_away ?? null,
           totalScore: guess?.total_score ?? 0,
           hpLost: Math.max(0, (healthBeforeRound[player.id] ?? player.health) - player.health),
+          hpRemaining: player.health,
           isEliminated: playersById[player.id]?.is_eliminated ?? false,
         };
       }),
