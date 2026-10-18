@@ -130,8 +130,7 @@
 .br-round-results { display: flex; flex-direction: column; gap: .65rem; }
 .br-result-card { display: flex; flex-direction: column; gap: .65rem; width: 100%; min-width: 0; }
 .br-reveal-heading { margin: 0; font-size: .9rem; letter-spacing: .08em; color: var(--br-muted); }
-.br-result-content { display: grid; gap: 1rem; min-width: 0; }
-.br-result-content.has-image { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+.br-result-content { display: grid; grid-template-columns: minmax(0,1fr); gap: 1rem; min-width: 0; }
 .br-reveal-artifact-image { display: block; width: 100%; height: 300px; object-fit: contain; align-self: center; }
 .br-result-details { display: flex; flex-direction: column; gap: .6rem; min-width: 0; }
 .br-reveal-answer { line-height: 1.35; display: grid; gap: .4rem; padding: .6rem; border: 1px solid var(--br-border); border-radius: 9px; }
@@ -213,7 +212,7 @@
 @media (max-width: 767px) {
   .br-home-layout { grid-template-columns: minmax(0,1fr); gap: .75rem; }
   .br-home-artwork img { width: 80px; }
-  .br-game-body-playing, .br-result-content.has-image { grid-template-columns: minmax(0,1fr); }
+  .br-game-body-playing { grid-template-columns: minmax(0,1fr); }
   .br-game-body-playing { grid-template-areas: "image" "guess" "players"; grid-template-rows: auto; }
   .br-artifact-pane { height: clamp(240px, 45dvh, 480px); }
   .br-reveal-artifact-image { height: 250px; }
@@ -241,22 +240,19 @@
   .br-game-body-playing { display: grid; }
   .br-artifact-pane { height: 100%; min-height: 0; }
   .br-lobby .br-list-scroll { max-height: min(120px, 16dvh); }
-  .br-round-results { flex: 1; min-height: 0; }
+  .br-round-results { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; }
   .br-round-results > .br-result-card, .br-round-results .br-result-content { flex: 1; min-height: 0; }
-  .br-round-results .br-reveal-artifact-image { height: 100%; min-height: 0; max-height: 100%; }
-  .br-round-results .br-result-content, .br-finished-result .br-result-content { grid-template-rows: minmax(0,1fr); }
-  .br-result-details { min-height: 0; }
-  .br-result-comparison { display: flex; flex-direction: column; min-height: 44px; flex: 0 1 auto; }
-  .br-result-comparison.is-open { flex: 1 1 100px; min-height: 100px; }
-  .br-result-comparison > .br-list-scroll { min-height: 0; flex: 1; }
+  .br-round-results > .br-result-card { min-height: min-content; }
+  .br-round-results .br-reveal-artifact-image, .br-finished-result .br-reveal-artifact-image { height: 100%; min-height: 0; max-height: 300px; }
+  .br-round-results .br-result-content, .br-finished-result .br-result-content { align-content: start; }
+  .br-round-results .br-result-content.has-image, .br-finished-result .br-result-content.has-image { grid-template-rows: minmax(100px,1fr) auto; }
+  .br-result-comparison > .br-list-scroll { max-height: min(160px, 20dvh); }
   .br-finished { flex: 1; min-height: 0; padding: 14px; }
   .br-finished-summary, .br-finished-result { flex: 1; min-height: 0; }
   .br-leaderboard { max-height: min(300px, 30dvh); }
-  .br-finished-result .br-reveal-artifact-image { height: 100%; max-height: 100%; min-height: 0; }
   .br-finished-result { overflow: auto; overscroll-behavior: contain; }
-  .br-finished-result > .br-result-card { min-height: 100%; }
-  .br-finished-result .br-result-content { min-height: 340px; }
-  .br-finished-result .br-reveal-artifact-image { max-height: 300px; }
+  .br-finished-result > .br-result-card { height: 100%; min-height: min-content; }
+  .br-finished-result .br-result-content { flex: 1; min-height: 0; }
   .br-finished.is-round .br-finished-announcement { display: none; }
 
   .br-session-detail { min-height: 0; overflow: auto; }
